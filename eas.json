@@ -1,0 +1,34 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "TODO_YOUR_APPLE_ID_EMAIL",
+        "ascAppId": "TODO_ASC_APP_ID",
+        "appleTeamId": "TODO_TEAM_ID"
+      },
+      "android": {
+        "serviceAccountKeyPath": "TODO_play-console-service-account.json",
+        "track": "internal"
+      }
+    }
+  }
+}

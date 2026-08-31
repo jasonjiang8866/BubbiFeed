@@ -9,18 +9,36 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#2D3142',
+    background: '#FFF9F6', // Soft warm cream/blush background
+    backgroundElement: '#F4EAE6', // Milky sand
+    backgroundSelected: '#E8D5CD', // Soft clay
+    textSecondary: '#7C809B', // Muted slate-purple
+    // Pastel Nursery Accent Colors
+    primary: '#FF9B85', // Warm Coral/Peach
+    breast: '#F7A8B8', // Cozy Rose Pink
+    bottle: '#8CD1CA', // Milky Mint/Cyan
+    solid: '#FFD97D', // Sunny Apricot/Yellow
+    lavender: '#C5A3FF', // Lavender
+    card: '#FFFFFF', // Milk-white solid cards
+    cardBorder: '#F2DFD7', // Cozy card divider
+    success: '#8BC34A',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#FFF4EE', // Warm light text
+    background: '#1F1916', // Dark warm espresso background
+    backgroundElement: '#2E2420', // Rich coffee ground
+    backgroundSelected: '#3E302A', // Creamy chocolate
+    textSecondary: '#AC9F98', // Soft warm grey
+    // Dark Pastel Nursery Accent Colors
+    primary: '#FFA591',
+    breast: '#FA7B93',
+    bottle: '#5EBDB2',
+    solid: '#FFCC4D',
+    lavender: '#A87EFF',
+    card: '#29201C', // Dark warm cards
+    cardBorder: '#392C27',
+    success: '#9CCC65',
   },
 } as const;
 
