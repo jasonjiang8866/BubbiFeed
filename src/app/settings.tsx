@@ -1,20 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  Pressable,
   Alert,
-  View,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import AppIcon from '@/components/app-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing, Colors } from '@/constants/theme';
-import { StorageService, BabyProfile, AppSettings } from '@/utils/storage';
+import { BottomTabInset, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
+import { AppSettings, BabyProfile, StorageService } from '@/utils/storage';
 import { useColorScheme } from 'react-native';
 
 export default function SettingsScreen() {
@@ -186,7 +187,7 @@ export default function SettingsScreen() {
           {!isEditing ? (
             <ThemedView type="backgroundElement" style={styles.card}>
               <View style={[styles.cardHeader, styles.profilesHeader]}>
-                <ThemedText type="subtitle">Baby Profiles</ThemedText>
+                <ThemedText type="subtitle" style={{ flexShrink: 1 }} numberOfLines={1}>Baby Profiles</ThemedText>
                 <Pressable
                   onPress={startAddProfile}
                   style={({ pressed }) => [
@@ -194,7 +195,10 @@ export default function SettingsScreen() {
                     { transform: [{ scale: pressed ? 0.95 : 1 }] }
                   ]}
                 >
-                  <ThemedText type="smallBold" style={{ color: colors.primary }}>➕ Add Baby</ThemedText>
+                  <View style={styles.addButtonInner}>
+                    <AppIcon name="plus" size={14} color={colors.primary} />
+                    <ThemedText type="smallBold" style={{ color: colors.primary }}>Add Baby</ThemedText>
+                  </View>
                 </Pressable>
               </View>
 
@@ -233,9 +237,17 @@ export default function SettingsScreen() {
                           },
                         ]}
                       >
-                        <ThemedText style={{ fontSize: 20 }}>
-                          {baby.gender === 'boy' ? '👶' : baby.gender === 'girl' ? '👧' : '🍼'}
-                        </ThemedText>
+                        <AppIcon
+                          name="baby"
+                          size={22}
+                          color={
+                            baby.gender === 'boy'
+                              ? colors.bottle
+                              : baby.gender === 'girl'
+                              ? colors.breast
+                              : colors.solid
+                          }
+                        />
                       </View>
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.one }}>
@@ -265,7 +277,7 @@ export default function SettingsScreen() {
                           { transform: [{ scale: pressed ? 0.88 : 1 }] }
                         ]}
                       >
-                        <ThemedText style={{ fontSize: 18 }}>✏️</ThemedText>
+                        <AppIcon name="edit" size={18} color={colors.textSecondary} />
                       </Pressable>
                       {profiles.length > 1 && (
                         <Pressable
@@ -275,7 +287,7 @@ export default function SettingsScreen() {
                             { transform: [{ scale: pressed ? 0.88 : 1 }] }
                           ]}
                         >
-                          <ThemedText style={{ fontSize: 18 }}>🗑️</ThemedText>
+                          <AppIcon name="trash" size={18} color={colors.breast} />
                         </Pressable>
                       )}
                     </View>
@@ -433,6 +445,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.half,
+  },
+  addButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   settingRow: {
     flexDirection: 'row',

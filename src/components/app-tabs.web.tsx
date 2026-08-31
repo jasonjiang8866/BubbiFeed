@@ -1,14 +1,15 @@
 import {
-  Tabs,
   TabList,
-  TabTrigger,
-  TabSlot,
-  TabTriggerSlotProps,
   TabListProps,
+  Tabs,
+  TabSlot,
+  TabTrigger,
+  TabTriggerSlotProps,
 } from 'expo-router/ui';
 import { SymbolView } from 'expo-symbols';
-import { Pressable, useColorScheme, View, StyleSheet, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, useColorScheme, useWindowDimensions, View } from 'react-native';
 
+import AppIcon, { type AppIconName } from './app-icon';
 import { ExternalLink } from './external-link';
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
@@ -31,19 +32,19 @@ export default function AppTabs() {
       <TabList asChild>
         <CustomTabList isMobile={isMobile}>
           <TabTrigger name="home" href="/" asChild>
-            <TabButton isMobile={isMobile} label="Home" icon="🏠" />
+            <TabButton isMobile={isMobile} label="Home" icon="home" />
           </TabTrigger>
           <TabTrigger name="logger" href="/logger" asChild>
-            <TabButton isMobile={isMobile} label="Log Feed" icon="🍼" />
+            <TabButton isMobile={isMobile} label="Log Feed" icon="milk" />
           </TabTrigger>
           <TabTrigger name="history" href="/history" asChild>
-            <TabButton isMobile={isMobile} label="History" icon="📅" />
+            <TabButton isMobile={isMobile} label="History" icon="history" />
           </TabTrigger>
           <TabTrigger name="insights" href="/insights" asChild>
-            <TabButton isMobile={isMobile} label="Insights" icon="📊" />
+            <TabButton isMobile={isMobile} label="Insights" icon="insights" />
           </TabTrigger>
           <TabTrigger name="settings" href="/settings" asChild>
-            <TabButton isMobile={isMobile} label="Settings" icon="⚙️" />
+            <TabButton isMobile={isMobile} label="Settings" icon="settings" />
           </TabTrigger>
         </CustomTabList>
       </TabList>
@@ -53,11 +54,14 @@ export default function AppTabs() {
 
 interface CustomTabButtonProps extends TabTriggerSlotProps {
   label: string;
-  icon: string;
+  icon: AppIconName;
   isMobile: boolean;
 }
 
 export function TabButton({ label, icon, isMobile, isFocused, ...props }: CustomTabButtonProps) {
+  const scheme = useColorScheme();
+  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
+  const iconColor = isFocused ? colors.text : colors.textSecondary;
   return (
     <Pressable
       {...props}
@@ -76,7 +80,9 @@ export function TabButton({ label, icon, isMobile, isFocused, ...props }: Custom
         ]}
       >
         {isMobile && (
-          <ThemedText style={styles.mobileIcon}>{icon}</ThemedText>
+          <View style={styles.mobileIcon}>
+            <AppIcon name={icon} size={20} color={iconColor} />
+          </View>
         )}
         <ThemedText
           type={isMobile ? 'code' : 'small'}
@@ -215,7 +221,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
   },
   mobileIcon: {
-    fontSize: 18,
     marginBottom: 2,
   },
   labelText: {

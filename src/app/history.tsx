@@ -1,21 +1,20 @@
-import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  Alert,
-  View,
-  Dimensions,
-  Platform,
   Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
 
+import AppIcon from '@/components/app-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing, Colors } from '@/constants/theme';
-import { StorageService, FeedingLog, AppSettings, BabyProfile } from '@/utils/storage';
+import { FEED_TYPE_ICON, FOOD_EMPTY_ICON } from '@/constants/feed-icons';
+import { BottomTabInset, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
+import { AppSettings, BabyProfile, FeedingLog, StorageService } from '@/utils/storage';
 import { useColorScheme } from 'react-native';
 
 export default function HistoryScreen() {
@@ -163,7 +162,7 @@ export default function HistoryScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {Object.keys(groupedLogs).length === 0 ? (
             <View style={styles.emptyView}>
-              <ThemedText style={styles.emptyEmoji}>🍽️</ThemedText>
+              <AppIcon name={FOOD_EMPTY_ICON} size={48} color={colors.textSecondary} />
               <ThemedText type="bold" style={{ textAlign: 'center' }}>No feedings recorded yet</ThemedText>
               <ThemedText type="small" style={{ color: colors.textSecondary, textAlign: 'center' }}>
                 Tap the "Log Feed" tab to add your first baby feeding details!
@@ -188,9 +187,6 @@ export default function HistoryScreen() {
                         ? colors.bottle
                         : colors.solid;
 
-                    const iconEmoji =
-                      log.type === 'breast' ? '👩‍🍼' : log.type === 'bottle' ? '🍼' : '🥑';
-
                     return (
                       <View key={log.id} style={styles.logWrapper}>
                         {/* Vertical Timeline Bar */}
@@ -205,7 +201,7 @@ export default function HistoryScreen() {
                         <ThemedView type="backgroundElement" style={styles.logCard}>
                           <View style={styles.cardHeader}>
                             <View style={styles.typeBadgeRow}>
-                              <ThemedText style={{ fontSize: 16 }}>{iconEmoji}</ThemedText>
+                              <AppIcon name={FEED_TYPE_ICON[log.type]} size={16} color={themeColor} />
                               <ThemedText type="bold" style={{ textTransform: 'capitalize' }}>
                                 {log.type} Feed
                               </ThemedText>
@@ -221,7 +217,7 @@ export default function HistoryScreen() {
                                   { transform: [{ scale: pressed ? 0.88 : 1 }] }
                                 ]}
                               >
-                                <ThemedText style={{ fontSize: 14 }}>🗑️</ThemedText>
+                                <AppIcon name="trash" size={16} color={colors.textSecondary} />
                               </Pressable>
                             </View>
                           </View>
@@ -302,7 +298,7 @@ export default function HistoryScreen() {
           
           <ThemedView type="backgroundElement" style={[styles.modalCard, { borderColor: colors.backgroundSelected }]}>
             <View style={[styles.modalIconContainer, { backgroundColor: colors.breast + '20' }]}>
-              <ThemedText style={{ fontSize: 24 }}>🗑️</ThemedText>
+              <AppIcon name="trash" size={24} color={colors.breast} />
             </View>
 
             <ThemedText type="bold" style={styles.modalTitle}>
@@ -393,10 +389,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
     marginTop: Spacing.six,
-  },
-  emptyEmoji: {
-    fontSize: 64,
-    marginBottom: Spacing.two,
   },
   dateGroup: {
     marginBottom: Spacing.four,

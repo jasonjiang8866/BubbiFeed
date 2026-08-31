@@ -1,18 +1,17 @@
-import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
-  StyleSheet,
   ScrollView,
-  View,
-  Dimensions,
+  StyleSheet,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { SymbolView } from 'expo-symbols';
-import { useFocusEffect } from 'expo-router';
 
+import AppIcon from '@/components/app-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing, Colors } from '@/constants/theme';
-import { StorageService, FeedingLog, AppSettings, BabyProfile } from '@/utils/storage';
+import { BottomTabInset, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
+import { AppSettings, BabyProfile, FeedingLog, StorageService } from '@/utils/storage';
 import { useColorScheme } from 'react-native';
 
 interface DailyStat {
@@ -114,7 +113,7 @@ export default function InsightsScreen() {
         
         const now = new Date();
         if (nextEstimatedTime.getTime() < now.getTime()) {
-          setNextFeedForecast('Hungry Now 🍼');
+          setNextFeedForecast('Hungry Now');
         } else {
           setNextFeedForecast(nextEstimatedTime.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }));
         }
@@ -174,7 +173,7 @@ export default function InsightsScreen() {
           {nextFeedForecast && (
             <ThemedView type="backgroundSelected" style={[styles.forecastCard, { borderColor: colors.primary }]}>
               <View style={styles.forecastHeader}>
-                <ThemedText style={{ fontSize: 24 }}>⏰</ThemedText>
+                <AppIcon name="clock" size={20} color={colors.primary} />
                 <ThemedText type="bold" style={{ color: colors.primary }}>AI NURSING FORECAST</ThemedText>
               </View>
               <View style={styles.forecastBody}>
@@ -190,7 +189,7 @@ export default function InsightsScreen() {
           <View style={styles.kpiGrid}>
             {/* KPI 1 */}
             <ThemedView type="backgroundElement" style={styles.kpiCard}>
-              <ThemedText style={{ fontSize: 24 }}>👩‍🍼</ThemedText>
+              <AppIcon name="baby" size={22} color={colors.breast} />
               <ThemedText type="small" style={{ color: colors.textSecondary }}>Nursing Avg</ThemedText>
               <ThemedText type="bold" style={styles.kpiValue}>
                 {nursingAvgMinutes} <ThemedText type="small">min/day</ThemedText>
@@ -199,7 +198,7 @@ export default function InsightsScreen() {
 
             {/* KPI 2 */}
             <ThemedView type="backgroundElement" style={styles.kpiCard}>
-              <ThemedText style={{ fontSize: 24 }}>🍼</ThemedText>
+              <AppIcon name="milk" size={22} color={colors.bottle} />
               <ThemedText type="small" style={{ color: colors.textSecondary }}>Bottle Avg</ThemedText>
               <ThemedText type="bold" style={styles.kpiValue}>
                 {getVolumeDisplay(bottleAvgVolume)}<ThemedText type="small">/day</ThemedText>
@@ -327,8 +326,8 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
   },
   forecastTime: {
-    fontSize: 32,
     fontWeight: 'bold',
+    fontVariant: ['tabular-nums'],
   },
   kpiGrid: {
     flexDirection: 'row',

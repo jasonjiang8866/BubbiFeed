@@ -1,22 +1,22 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  View,
   Alert,
-  Dimensions,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { SymbolView } from 'expo-symbols';
-import { useRouter, useFocusEffect } from 'expo-router';
 
+import AppIcon from '@/components/app-icon';
+import { Confetti, ConfettiRef } from '@/components/confetti';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing, Colors } from '@/constants/theme';
-import { StorageService, FeedingLog, AppSettings, BabyProfile } from '@/utils/storage';
+import { FEED_TYPE_COLOR, FEED_TYPE_ICON } from '@/constants/feed-icons';
+import { BottomTabInset, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
+import { AppSettings, BabyProfile, FeedingLog, StorageService } from '@/utils/storage';
 import { useColorScheme } from 'react-native';
-import { Confetti, ConfettiRef } from '@/components/confetti';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -179,7 +179,7 @@ export default function HomeScreen() {
       babyId: activeBaby.id,
       type: 'bottle',
       timestamp: new Date().toISOString(),
-      notes: 'Logged with 3 AM Speedy Preset ⚡',
+      notes: 'Logged with 3 AM Speedy Preset',
       details: {
         bottle: {
           amount: amountMl,
@@ -224,9 +224,17 @@ export default function HomeScreen() {
                   },
                 ]}
               >
-                <ThemedText style={{ fontSize: 24 }}>
-                  {activeBaby?.gender === 'boy' ? '👶' : activeBaby?.gender === 'girl' ? '👧' : '🍼'}
-                </ThemedText>
+                <AppIcon
+                  name="baby"
+                  size={28}
+                  color={
+                    activeBaby?.gender === 'boy'
+                      ? colors.bottle
+                      : activeBaby?.gender === 'girl'
+                      ? colors.breast
+                      : colors.solid
+                  }
+                />
               </View>
               <View>
                 <ThemedText type="small" style={{ color: colors.textSecondary }}>Welcome back!</ThemedText>
@@ -271,9 +279,11 @@ export default function HomeScreen() {
             <ThemedText style={[styles.dialCounter, { color: colors.primary }]}>{timeSinceLastFeed}</ThemedText>
             {lastFeedObj && (
               <View style={styles.lastFeedSubDetails}>
-                <ThemedText style={{ fontSize: 12 }}>
-                  {lastFeedObj.type === 'breast' ? '👩‍🍼' : lastFeedObj.type === 'bottle' ? '🍼' : '🥑'}
-                </ThemedText>
+                <AppIcon
+                  name={FEED_TYPE_ICON[lastFeedObj.type]}
+                  size={14}
+                  color={colors[FEED_TYPE_COLOR[lastFeedObj.type]]}
+                />
                 <ThemedText type="small" style={{ color: colors.textSecondary }}>
                   Last Session: {lastFeedObj.type.toUpperCase()} at {new Date(lastFeedObj.timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                 </ThemedText>
@@ -286,17 +296,17 @@ export default function HomeScreen() {
             <ThemedText type="subtitle" style={styles.cardTitle}>Today's Nursing Scorecard</ThemedText>
             <View style={styles.totalsGrid}>
               <View style={styles.totalItem}>
-                <ThemedText style={{ fontSize: 22 }}>👩‍🍼</ThemedText>
+                <AppIcon name="baby" size={22} color={colors.breast} />
                 <ThemedText type="bold">{todayNursingMins}m</ThemedText>
                 <ThemedText type="small" style={{ color: colors.textSecondary }}>Nursing</ThemedText>
               </View>
               <View style={styles.totalItem}>
-                <ThemedText style={{ fontSize: 22 }}>🍼</ThemedText>
+                <AppIcon name="milk" size={22} color={colors.bottle} />
                 <ThemedText type="bold">{getVolumeDisplay(todayBottleMl)}</ThemedText>
                 <ThemedText type="small" style={{ color: colors.textSecondary }}>Bottle</ThemedText>
               </View>
               <View style={styles.totalItem}>
-                <ThemedText style={{ fontSize: 22 }}>🥑</ThemedText>
+                <AppIcon name="apple" size={22} color={colors.solid} />
                 <ThemedText type="bold">{todaySolidsCount}</ThemedText>
                 <ThemedText type="small" style={{ color: colors.textSecondary }}>Solids</ThemedText>
               </View>
@@ -306,7 +316,7 @@ export default function HomeScreen() {
           {/* 3 AM Fast Bottle Logger */}
           <ThemedView type="backgroundElement" style={styles.presetsCard}>
             <View style={styles.presetTitleRow}>
-              <ThemedText style={{ fontSize: 14 }}>⚡</ThemedText>
+              <AppIcon name="zap" size={14} color={colors.primary} />
               <ThemedText type="smallBold">3 AM Speedy Presets</ThemedText>
             </View>
             <ThemedText type="small" style={{ color: colors.textSecondary, marginTop: -Spacing.one }}>
@@ -352,7 +362,7 @@ export default function HomeScreen() {
                 { backgroundColor: colors.primary + '20', transform: [{ scale: pressed ? 0.95 : 1 }] },
               ]}
             >
-              <ThemedText style={{ fontSize: 22 }}>✍️</ThemedText>
+              <AppIcon name="penLine" size={22} color={colors.primary} />
               <ThemedText type="smallBold" style={{ color: colors.primary }}>Log Manual Feed</ThemedText>
             </Pressable>
             <Pressable
@@ -362,7 +372,7 @@ export default function HomeScreen() {
                 { backgroundColor: colors.bottle + '20', transform: [{ scale: pressed ? 0.95 : 1 }] },
               ]}
             >
-              <ThemedText style={{ fontSize: 18 }}>📅</ThemedText>
+              <AppIcon name="history" size={20} color={colors.bottle} />
               <ThemedText type="smallBold" style={{ color: colors.bottle }}>View Ledger</ThemedText>
             </Pressable>
           </View>
@@ -378,13 +388,12 @@ export default function HomeScreen() {
             ) : (
               <View style={styles.recentList}>
                 {logs.slice(0, 3).map((log) => {
-                  const labelColor = log.type === 'breast' ? colors.breast : log.type === 'bottle' ? colors.bottle : colors.solid;
-                  const logIcon = log.type === 'breast' ? '👩‍🍼' : log.type === 'bottle' ? '🍼' : '🥑';
-                  
+                  const labelColor = colors[FEED_TYPE_COLOR[log.type]];
+
                   return (
                     <View key={log.id} style={styles.recentItem}>
                       <View style={[styles.recentIconBadge, { backgroundColor: labelColor + '20' }]}>
-                        <ThemedText style={{ fontSize: 16 }}>{logIcon}</ThemedText>
+                        <AppIcon name={FEED_TYPE_ICON[log.type]} size={16} color={labelColor} />
                       </View>
                       <View style={{ flex: 1 }}>
                         <ThemedText type="bold" style={{ textTransform: 'capitalize' }}>
@@ -476,6 +485,7 @@ const styles = StyleSheet.create({
   dialCounter: {
     fontSize: 40,
     fontWeight: 'bold',
+    fontVariant: ['tabular-nums'],
   },
   lastFeedSubDetails: {
     flexDirection: 'row',

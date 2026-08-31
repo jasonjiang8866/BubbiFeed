@@ -1,22 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  Pressable,
   Alert,
-  View,
-  Dimensions,
-  Platform,
   Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import AppIcon from '@/components/app-icon';
+import { Confetti, ConfettiRef } from '@/components/confetti';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing, Colors } from '@/constants/theme';
-import { Confetti, ConfettiRef } from '@/components/confetti';
-import { StorageService, FeedingType, FeedingLog, AppSettings, BabyProfile } from '@/utils/storage';
+import { BottomTabInset, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
+import { AppSettings, BabyProfile, FeedingLog, FeedingType, StorageService } from '@/utils/storage';
 import { useColorScheme } from 'react-native';
 
 export default function LoggerScreen() {
@@ -268,7 +268,7 @@ export default function LoggerScreen() {
                 </ThemedText>
               </View>
               <View style={[styles.avatarBadge, { backgroundColor: colors.primary + '20' }]}>
-                <ThemedText style={{ fontSize: 18 }}>🍼</ThemedText>
+                <AppIcon name="milk" size={20} color={colors.primary} />
               </View>
             </View>
           </ThemedView>
@@ -324,9 +324,12 @@ export default function LoggerScreen() {
                       },
                     ]}
                   >
-                    <ThemedText type="smallBold" style={{ color: breastMode === 'timer' ? '#FFFFFF' : colors.text }}>
-                      ⏱️ LIVE TIMER
-                    </ThemedText>
+                    <View style={styles.toggleBtnInner}>
+                      <AppIcon name="timer" size={14} color={breastMode === 'timer' ? '#FFFFFF' : colors.text} />
+                      <ThemedText type="smallBold" style={{ color: breastMode === 'timer' ? '#FFFFFF' : colors.text }}>
+                        LIVE TIMER
+                      </ThemedText>
+                    </View>
                   </Pressable>
                   <Pressable
                     onPress={() => {
@@ -343,9 +346,12 @@ export default function LoggerScreen() {
                       },
                     ]}
                   >
-                    <ThemedText type="smallBold" style={{ color: breastMode === 'manual' ? '#FFFFFF' : colors.text }}>
-                      ✍️ MANUAL INPUT
-                    </ThemedText>
+                    <View style={styles.toggleBtnInner}>
+                      <AppIcon name="penLine" size={14} color={breastMode === 'manual' ? '#FFFFFF' : colors.text} />
+                      <ThemedText type="smallBold" style={{ color: breastMode === 'manual' ? '#FFFFFF' : colors.text }}>
+                        MANUAL INPUT
+                      </ThemedText>
+                    </View>
                   </Pressable>
                 </View>
 
@@ -379,9 +385,11 @@ export default function LoggerScreen() {
                             },
                           ]}
                         >
-                          <ThemedText style={{ fontSize: 16 }}>
-                            {timerActive === 'left' ? '⏸️' : '▶️'}
-                          </ThemedText>
+                          <AppIcon
+                            name={timerActive === 'left' ? 'pause' : 'play'}
+                            size={18}
+                            color={timerActive === 'left' ? colors.primary : colors.text}
+                          />
                         </Pressable>
                       </View>
 
@@ -408,9 +416,11 @@ export default function LoggerScreen() {
                             },
                           ]}
                         >
-                          <ThemedText style={{ fontSize: 16 }}>
-                            {timerActive === 'right' ? '⏸️' : '▶️'}
-                          </ThemedText>
+                          <AppIcon
+                            name={timerActive === 'right' ? 'pause' : 'play'}
+                            size={18}
+                            color={timerActive === 'right' ? colors.primary : colors.text}
+                          />
                         </Pressable>
                       </View>
                     </View>
@@ -481,9 +491,12 @@ export default function LoggerScreen() {
                             },
                           ]}
                         >
-                          <ThemedText type="smallBold" style={{ color: lastBreastUsed === 'left' ? colors.breast : colors.text }}>
-                            👈 LEFT SIDE
-                          </ThemedText>
+                          <View style={styles.toggleBtnInner}>
+                            <AppIcon name="arrowLeft" size={14} color={lastBreastUsed === 'left' ? colors.breast : colors.text} />
+                            <ThemedText type="smallBold" style={{ color: lastBreastUsed === 'left' ? colors.breast : colors.text }}>
+                              LEFT SIDE
+                            </ThemedText>
+                          </View>
                         </Pressable>
 
                         <Pressable
@@ -497,9 +510,12 @@ export default function LoggerScreen() {
                             },
                           ]}
                         >
-                          <ThemedText type="smallBold" style={{ color: lastBreastUsed === 'right' ? colors.breast : colors.text }}>
-                            👉 RIGHT SIDE
-                          </ThemedText>
+                          <View style={styles.toggleBtnInner}>
+                            <AppIcon name="arrowRight" size={14} color={lastBreastUsed === 'right' ? colors.breast : colors.text} />
+                            <ThemedText type="smallBold" style={{ color: lastBreastUsed === 'right' ? colors.breast : colors.text }}>
+                              RIGHT SIDE
+                            </ThemedText>
+                          </View>
                         </Pressable>
                       </View>
                     </View>
@@ -693,10 +709,15 @@ export default function LoggerScreen() {
                   },
                 ]}
               >
-                <ThemedText style={{ color: hasCustomTime ? colors.text : colors.textSecondary + 'B0' }}>
-                  {hasCustomTime ? `⏰ Custom: ${formatSelectedTime()}` : `⏰ Logged: Current Time (${new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })})`}
-                </ThemedText>
-                <ThemedText style={{ color: activeTab === 'breast' ? colors.breast : activeTab === 'bottle' ? colors.bottle : colors.solid, fontSize: 12, fontWeight: 'bold' }}>
+                <View style={styles.timePickerLabelRow}>
+                  <AppIcon name="clock" size={16} color={hasCustomTime ? colors.text : colors.textSecondary} />
+                  <ThemedText
+                    numberOfLines={2}
+                    style={{ flexShrink: 1, color: hasCustomTime ? colors.text : colors.textSecondary + 'B0' }}>
+                    {hasCustomTime ? `Custom: ${formatSelectedTime()}` : `Logged: Current Time (${new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })})`}
+                  </ThemedText>
+                </View>
+                <ThemedText style={{ color: activeTab === 'breast' ? colors.breast : activeTab === 'bottle' ? colors.bottle : colors.solid, fontSize: 12, fontWeight: 'bold', flexShrink: 0 }}>
                   CHANGE
                 </ThemedText>
               </Pressable>
@@ -974,9 +995,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
   },
   timerDigit: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: 'bold',
     fontFamily: Platform.select({ ios: 'Courier New', android: 'monospace' }),
+    fontVariant: ['tabular-nums'],
+  },
+  toggleBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   timerBtn: {
     width: 44,
@@ -1007,8 +1035,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.02)',
   },
   amountText: {
-    fontSize: 48,
+    fontSize: 40,
     fontWeight: 'bold',
+    fontVariant: ['tabular-nums'],
   },
   presetGrid: {
     flexDirection: 'row',
@@ -1136,6 +1165,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Spacing.three,
+    gap: Spacing.two,
+  },
+  timePickerLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    flexShrink: 1,
+    flex: 1,
   },
   dialContainer: {
     flexDirection: 'row',

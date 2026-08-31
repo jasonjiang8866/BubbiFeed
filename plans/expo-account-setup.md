@@ -106,6 +106,27 @@ provisioning profile automatically (`eas credentials`).
 
 ---
 
+## Known issue & workaround: EAS "npm ci" lockfile failure (2026-08-31)
+
+EAS build workers repeatedly failed `npm ci` with
+`Missing: typescript@5.9.3 from lock file` even though the committed
+`package.json` + `package-lock.json` were verified correct locally and inside
+`git archive HEAD` (the server appeared to serve a stale cached source mix).
+Attempts that did NOT fix it: `npm install` re-sync, `--clear-cache`,
+`EAS_NO_VCS=1`, upgrading eas-cli to 23.
+
+**Workaround applied (commits 86b9cad / later):**
+1. Deleted `package-lock.json` from the repo (it stays in git history).
+2. Set `EAS_BUILD_SKIP_LOCKFILE_CHECK=1` when running `eas build` (the check
+   runs client-side; the eas.json `env` entry alone is not enough).
+   ```bash
+   EAS_BUILD_SKIP_LOCKFILE_CHECK=1 npx eas build --platform android --profile preview
+   ```
+   The worker then runs a fresh `npm install`, which self-heals any mismatch.
+
+**To restore determinism later:** re-add the lockfile (`git checkout <old-sha> -- package-lock.json`),
+remove the skip flag, and rebuild — once the EAS-side caching issue is resolved.
+
 ## Troubleshooting
 
 | Symptom | Fix |
