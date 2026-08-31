@@ -251,9 +251,11 @@ export default function SettingsScreen() {
                       </View>
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.one }}>
-                          <ThemedText type="bold">{baby.name}</ThemedText>
+                          <ThemedText type="bold" numberOfLines={1} style={{ flexShrink: 1 }}>
+                            {baby.name}
+                          </ThemedText>
                           {isActive && (
-                            <View style={[styles.activeBadge, { backgroundColor: colors.primary + '30' }]}>
+                            <View style={[styles.activeBadge, { backgroundColor: colors.primary + '30', flexShrink: 0 }]}>
                               <ThemedText style={{ fontSize: 9, color: colors.primary, fontWeight: 'bold' }}>
                                 ACTIVE
                               </ThemedText>

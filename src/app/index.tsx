@@ -483,9 +483,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
   },
   dialCounter: {
-    fontSize: 40,
+    fontSize: 32,
+    lineHeight: 38,
     fontWeight: 'bold',
     fontVariant: ['tabular-nums'],
+    textAlign: 'center',
   },
   lastFeedSubDetails: {
     flexDirection: 'row',

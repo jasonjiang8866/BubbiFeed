@@ -1035,9 +1035,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.02)',
   },
   amountText: {
-    fontSize: 40,
+    fontSize: 36,
+    lineHeight: 44,
     fontWeight: 'bold',
     fontVariant: ['tabular-nums'],
+    textAlign: 'center',
   },
   presetGrid: {
     flexDirection: 'row',
