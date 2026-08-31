@@ -12,8 +12,7 @@
       "distribution": "internal",
       "ios": {
         "simulator": true
-      },
-      "install": "npm install --include=dev"
+      }
     },
     "production": {
       "autoIncrement": true
