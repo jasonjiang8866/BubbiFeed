@@ -365,7 +365,11 @@ export default function LoggerScreen() {
                       {/* Left Side */}
                       <View style={[styles.breastCard, { borderColor: timerActive === 'left' ? colors.breast : colors.cardBorder }]}>
                         <ThemedText type="smallBold" style={{ color: colors.textSecondary }}>LEFT SIDE</ThemedText>
-                        <ThemedText style={[styles.timerDigit, { color: leftSeconds > 0 ? colors.breast : colors.text }]}>
+                        <ThemedText
+                          style={[styles.timerDigit, { color: leftSeconds > 0 ? colors.breast : colors.text }]}
+                          numberOfLines={1}
+                          maxFontSizeMultiplier={1}
+                        >
                           {formatTimer(leftSeconds)}
                         </ThemedText>
                         <Pressable
@@ -396,7 +400,11 @@ export default function LoggerScreen() {
                       {/* Right Side */}
                       <View style={[styles.breastCard, { borderColor: timerActive === 'right' ? colors.breast : colors.cardBorder }]}>
                         <ThemedText type="smallBold" style={{ color: colors.textSecondary }}>RIGHT SIDE</ThemedText>
-                        <ThemedText style={[styles.timerDigit, { color: rightSeconds > 0 ? colors.breast : colors.text }]}>
+                        <ThemedText
+                          style={[styles.timerDigit, { color: rightSeconds > 0 ? colors.breast : colors.text }]}
+                          numberOfLines={1}
+                          maxFontSizeMultiplier={1}
+                        >
                           {formatTimer(rightSeconds)}
                         </ThemedText>
                         <Pressable
@@ -995,10 +1003,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
   },
   timerDigit: {
-    fontSize: 30,
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: 'bold',
     fontFamily: Platform.select({ ios: 'Courier New', android: 'monospace' }),
     fontVariant: ['tabular-nums'],
+    textAlign: 'center',
   },
   toggleBtnInner: {
     flexDirection: 'row',
