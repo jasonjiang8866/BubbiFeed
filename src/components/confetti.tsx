@@ -1,5 +1,5 @@
-import React, { useState, forwardRef, useImperativeHandle } from 'react';
-import { StyleSheet, View, Animated, Dimensions } from 'react-native';
+import { forwardRef, useImperativeHandle, useState } from 'react';
+import { Animated, Dimensions, StyleSheet, View } from 'react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -33,15 +33,16 @@ export const Confetti = forwardRef<ConfettiRef, {}>((props, ref) => {
 
   useImperativeHandle(ref, () => ({
     trigger() {
-      // Generate 50 random confetti particles
-      const newParticles: Particle[] = Array.from({ length: 50 }).map((_, index) => {
-        const angle = Math.PI + (Math.random() - 0.5) * (Math.PI / 1.5); // Burst upwards cone
-        const distance = 100 + Math.random() * 200; // Launch range
-        
+      // Generate 60 random confetti particles
+      const newParticles: Particle[] = Array.from({ length: 60 }).map((_, index) => {
+        // True upward cone: angle centered on straight-up (-PI/2), spread ± ~72deg
+        const angle = -Math.PI / 2 + (Math.random() - 0.5) * (Math.PI * 0.8);
+        const distance = 140 + Math.random() * 220; // Launch range (px)
+
         return {
           id: Date.now() + index,
           color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
-          size: 6 + Math.random() * 8,
+          size: 8 + Math.random() * 9, // slightly larger so they read as confetti
           isRound: Math.random() > 0.5,
           angle,
           distance,
@@ -84,8 +85,8 @@ export const Confetti = forwardRef<ConfettiRef, {}>((props, ref) => {
           inputRange: [0, 0.4, 1],
           outputRange: [
             0,
-            (p.distance * 0.7) * Math.sin(p.angle), // launch up
-            (p.distance * 0.3) * Math.sin(p.angle) + 400, // fall down under gravity
+            (p.distance * 0.8) * Math.sin(p.angle), // launch up along the cone
+            (p.distance * 0.3) * Math.sin(p.angle) + 520, // fall down under gravity
           ],
         });
 

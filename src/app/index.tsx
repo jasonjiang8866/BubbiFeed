@@ -189,10 +189,11 @@ export default function HomeScreen() {
     };
     await StorageService.saveLog(newLog);
     confettiRef.current?.trigger();
+    // Let the confetti celebration (~2s) play before the success dialog covers it
     setTimeout(() => {
       Alert.alert('Logged!', `Speedy bottle of ${getVolumeDisplay(amountMl)} recorded.`);
       loadDashboardData();
-    }, 200);
+    }, 2200);
   };
 
   const isOz = settings?.volumeUnit === 'oz';

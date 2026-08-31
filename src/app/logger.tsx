@@ -216,6 +216,7 @@ export default function LoggerScreen() {
     confettiRef.current?.trigger();
 
     // Reset Forms
+    // Let the confetti celebration (~2s) play before the success dialog covers it
     setTimeout(() => {
       Alert.alert('Saved!', 'Feeding session logged successfully.', [
         {
