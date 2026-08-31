@@ -12,6 +12,9 @@
       "distribution": "internal",
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "EAS_BUILD_SKIP_LOCKFILE_CHECK": "1"
       }
     },
     "production": {
