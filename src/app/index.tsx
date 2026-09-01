@@ -13,6 +13,7 @@ import AppIcon from '@/components/app-icon';
 import { Confetti, ConfettiRef } from '@/components/confetti';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useToast } from '@/components/toast';
 import { FEED_TYPE_COLOR, FEED_TYPE_ICON } from '@/constants/feed-icons';
 import { BottomTabInset, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
 import { AppSettings, BabyProfile, FeedingLog, StorageService } from '@/utils/storage';
@@ -25,6 +26,7 @@ export default function HomeScreen() {
 
   const [activeBaby, setActiveBaby] = useState<BabyProfile | null>(null);
   const confettiRef = useRef<ConfettiRef>(null);
+  const { show } = useToast();
   const [profiles, setProfiles] = useState<BabyProfile[]>([]);
   const [logs, setLogs] = useState<FeedingLog[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -189,11 +191,13 @@ export default function HomeScreen() {
     };
     await StorageService.saveLog(newLog);
     confettiRef.current?.trigger();
-    // Let the confetti celebration (~2s) play before the success dialog covers it
-    setTimeout(() => {
-      Alert.alert('Logged!', `Speedy bottle of ${getVolumeDisplay(amountMl)} recorded.`);
-      loadDashboardData();
-    }, 2200);
+    show({
+      title: 'Feeding logged',
+      description: `Speedy bottle of ${getVolumeDisplay(amountMl)} recorded.`,
+      icon: 'milk',
+      tone: 'bottle',
+    });
+    loadDashboardData();
   };
 
   const isOz = settings?.volumeUnit === 'oz';

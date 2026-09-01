@@ -15,6 +15,8 @@ import AppIcon from '@/components/app-icon';
 import { Confetti, ConfettiRef } from '@/components/confetti';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useToast } from '@/components/toast';
+import { FEED_TYPE_COLOR, FEED_TYPE_ICON } from '@/constants/feed-icons';
 import { BottomTabInset, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
 import { AppSettings, BabyProfile, FeedingLog, FeedingType, StorageService } from '@/utils/storage';
 import { useColorScheme } from 'react-native';
@@ -27,6 +29,7 @@ export default function LoggerScreen() {
   const [activeBaby, setActiveBaby] = useState<BabyProfile | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const confettiRef = useRef<ConfettiRef>(null);
+  const { show } = useToast();
 
   // Common Form States
   const [timestamp, setTimestamp] = useState<Date>(new Date());
@@ -214,31 +217,27 @@ export default function LoggerScreen() {
 
     await StorageService.saveLog(newLog);
     confettiRef.current?.trigger();
+    show({
+      title: 'Feeding logged',
+      description: 'Session saved to history.',
+      icon: FEED_TYPE_ICON[activeTab],
+      tone: FEED_TYPE_COLOR[activeTab],
+    });
 
-    // Reset Forms
-    // Let the confetti celebration (~2s) play before the success dialog covers it
-    setTimeout(() => {
-      Alert.alert('Saved!', 'Feeding session logged successfully.', [
-        {
-          text: 'OK',
-          onPress: () => {
-            setNotes('');
-            setLeftSeconds(0);
-            setRightSeconds(0);
-            setTimerActive(null);
-            setFoodDescription('');
-            setAmountCategory('few_bites');
-            setLeftManualMins('');
-            setRightManualMins('');
-            setLastBreastUsed(null);
-            setHasCustomTime(false);
-            setSelectedHour(new Date().getHours() % 12 || 12);
-            setSelectedMinute(new Date().getMinutes());
-            setSelectedAmPm(new Date().getHours() >= 12 ? 'PM' : 'AM');
-          },
-        },
-      ]);
-    }, 200);
+    // Reset Forms (toast is non-blocking, so reset immediately)
+    setNotes('');
+    setLeftSeconds(0);
+    setRightSeconds(0);
+    setTimerActive(null);
+    setFoodDescription('');
+    setAmountCategory('few_bites');
+    setLeftManualMins('');
+    setRightManualMins('');
+    setLastBreastUsed(null);
+    setHasCustomTime(false);
+    setSelectedHour(new Date().getHours() % 12 || 12);
+    setSelectedMinute(new Date().getMinutes());
+    setSelectedAmPm(new Date().getHours() >= 12 ? 'PM' : 'AM');
   };
 
   // Convert volume unit displays
