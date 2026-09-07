@@ -9,7 +9,7 @@ import { ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 /**
- * Modern, non-blocking toast system (shadcn/sonner-style) for FeedMyBaby.
+ * Modern, non-blocking toast system (shadcn/sonner-style) for BubbiFeed.
  *
  * Replaces legacy `Alert.alert` success popups with a top banner card:
  * milk-white rounded card, tinted icon chip, title + description,

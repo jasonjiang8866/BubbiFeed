@@ -1,5 +1,10 @@
 # FeedMyBaby — UI Audit & Fix Plan (2026-08-31)
 
+> **Historical plan:** The current product brand is **BubbiFeed** (2026-09-07).
+> This dated audit and its original design decisions remain unchanged; they are
+> not a new redesign proposal. See the [brand rules](../assets/brand/README.md)
+> and [rebrand audit](bubbifeed-rebrand.md).
+
 Source: owner device screenshots (Android, build 1f5f62c6) showing missing/wrong tab icons,
 font inconsistency, text clipping/overflow, and misalignment across all 5 tabs.
 

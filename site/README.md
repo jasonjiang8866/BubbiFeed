@@ -1,13 +1,33 @@
-# Nfusia official site (nfusia.com) — FeedMyBaby lives under /feedmybaby
+# Nfusia official site — BubbiFeed
 
 Static site for Cloudflare Pages. No build step required.
 
+The product name is **BubbiFeed**. Its existing public path remains
+[nfusia.com/feedmybaby/](https://nfusia.com/feedmybaby/); the rename does not change
+domains, contact addresses or Cloudflare project identity. Nfusia remains the publisher.
+See the [brand rules](../assets/brand/README.md) and [rebrand audit](../plans/bubbifeed-rebrand.md).
+
 **Layout:**
 - `site/index.html` — apex landing for `nfusia.com` (studio home, links to the app)
-- `site/feedmybaby/` — the FeedMyBaby product site (landing, privacy, support) at `nfusia.com/feedmybaby`
+- `site/feedmybaby/` — the BubbiFeed product site (landing, privacy, support) at `nfusia.com/feedmybaby`
 - `site/_headers` — security headers (applied site-wide by Pages)
 
+## Local preview
+
+From the repository root (no cloud deployment):
+
+```sh
+python3 -m http.server 4173 --bind 127.0.0.1 --directory site
+```
+
+Open [the studio entry](http://127.0.0.1:4173/) and
+[BubbiFeed](http://127.0.0.1:4173/feedmybaby/).
+
 ## Deploy to Cloudflare Pages
+
+Deployment is a separate, explicitly authorized operation. The existing site is
+already associated with a Pages project; do not create a replacement project or
+change its domain just for this rename. The following is initial-setup reference.
 
 1. Push this repo to GitHub (or use Direct Upload / Wrangler CLI).
 2. Cloudflare Pages: **Create project** → connect repo (or upload the `site/` folder).

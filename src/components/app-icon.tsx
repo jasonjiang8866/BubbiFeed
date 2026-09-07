@@ -28,7 +28,7 @@ import type { ColorValue } from 'react-native';
 import { useTheme } from '@/hooks/use-theme';
 
 /**
- * Central icon registry for FeedMyBaby.
+ * Central icon registry for BubbiFeed.
  *
  * All icons are Lucide (SVG via react-native-svg). They use `currentColor` internally,
  * so pass `color` to tint. Default size 20 / strokeWidth 2 matches the site icon style.

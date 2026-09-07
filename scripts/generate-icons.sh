@@ -26,8 +26,8 @@ render assets/brand/favicon.svg           assets/images/favicon.png             
 
 # Site assets (Cloudflare Pages — app site lives under site/feedmybaby/)
 # icon.svg is intrinsically 1024px; render at 1024 then downscale to 512.
-render assets/brand/icon.svg              /tmp/feedmybaby-icon-1024.png           1024
-sips -z 512 512 /tmp/feedmybaby-icon-1024.png --out site/feedmybaby/icon-512.png >/dev/null
+render assets/brand/icon.svg              /tmp/bubbifeed-icon-1024.png           1024
+sips -z 512 512 /tmp/bubbifeed-icon-1024.png --out site/feedmybaby/icon-512.png >/dev/null
 echo "== site/feedmybaby/icon-512.png (downscaled)"
 render assets/brand/favicon.svg           site/feedmybaby/favicon.png               48
 

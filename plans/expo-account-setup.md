@@ -1,7 +1,13 @@
-# Expo account setup — step by step
+# BubbiFeed — Expo account setup reference
 
 > Goal: create a free Expo account and link this repo to it, so EAS Build
 > (cloud builds for iOS/Android) works. ~5 minutes, no payment required.
+
+> **Current brand note (2026-09-07):** BubbiFeed already uses the existing Expo/EAS
+> association in [`app.json`](../app.json). Keep its slug, owner and project ID.
+> The initial setup below is reference only; do not initialize a new EAS project,
+> rename the slug or trigger a cloud build as part of the display-brand rename.
+> The dated incident record is preserved. See the [rebrand audit](bubbifeed-rebrand.md).
 
 ---
 
@@ -68,7 +74,8 @@ npx eas init
 
 What this does:
 
-- Creates the project **FeedMyBaby** in your Expo account dashboard.
+- For an initial setup, creates or links the Expo project. BubbiFeed retains the
+  already-linked project; its dashboard label may still show the former brand.
 - Writes the generated EAS `projectId` into `app.json` under
   `expo.extra.eas.projectId`.
 - ⚠️ EAS will complain that `app.json` is not git-committed — commit the repo

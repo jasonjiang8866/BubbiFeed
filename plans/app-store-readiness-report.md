@@ -1,5 +1,10 @@
 # FeedMyBaby — App Store & Google Play Publish Readiness Report
 
+> **Historical report:** The product is now **BubbiFeed** (brand-only rename,
+> 2026-09-07). Names, identifiers, dates and findings below describe their original
+> review/release context, not today's configuration. They have not been rewritten.
+> See the [current project overview](../README.md) and [rebrand audit](bubbifeed-rebrand.md).
+
 Reviewed: 2026-08-15 · Expo SDK 56 (`expo ~56.0.3`, React Native `0.85.3`) · Workspace: `feedmybaby`
 
 **Overall verdict: 🔴 NOT READY for submission.** The core app functionality (feeding logging, history, insights, settings) is implemented and fully offline, which is a privacy advantage. However, the project is still in "fresh Expo template" state regarding distribution: placeholder identifiers, template branding, leftover template screens, and zero build/release pipeline. Estimated **14 blocking** and **8 non-blocking** gaps below.

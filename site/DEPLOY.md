@@ -1,9 +1,15 @@
 # Deploying nfusia.com — step by step
 
 Goal: host this `site/` folder on Cloudflare Pages at `https://nfusia.com`, with the
-FeedMyBaby app site at **`https://nfusia.com/feedmybaby`**, and create the
+BubbiFeed app site at **`https://nfusia.com/feedmybaby`**, and create the
 `support@nfusia.com` mailbox. Prerequisite (already true): `nfusia.com` DNS is hosted on
 your Cloudflare account.
+
+> **Brand-only rename (2026-09-07):** BubbiFeed keeps the existing website path,
+> contact address and Pages project. The provisioning steps below are historical
+> setup instructions, not permission to create another project or change DNS.
+> No production deployment or mailbox/domain migration is part of the rebrand.
+> See the [rebrand audit](../plans/bubbifeed-rebrand.md).
 
 ---
 

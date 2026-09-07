@@ -121,7 +121,7 @@ export function CustomTabList({ children, isMobile, ...props }: CustomTabListPro
       >
         {!isMobile && (
           <ThemedText type="smallBold" style={styles.brandText}>
-            FeedMyBaby
+            BubbiFeed
           </ThemedText>
         )}
 
