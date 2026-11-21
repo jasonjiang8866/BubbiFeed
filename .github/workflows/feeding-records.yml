@@ -1,0 +1,25 @@
+name: Feeding record regressions
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  feeding-records:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-package-lock --no-audit --no-fund
+      - run: npm test
+      - run: npx playwright install --with-deps --only-shell chromium
+      - run: npm run test:web
+        env:
+          EXPO_NO_TELEMETRY: '1'

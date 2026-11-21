@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useToast } from '@/components/toast';
 import AppIcon from '@/components/app-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -22,6 +23,7 @@ interface DailyStat {
 }
 
 export default function InsightsScreen() {
+  const { show } = useToast();
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
 
@@ -39,8 +41,8 @@ export default function InsightsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      calculateInsights();
-    }, [])
+      void calculateInsights().catch(() => show({ title: 'Could not load feeding insights' }));
+    }, [show])
   );
 
   const calculateInsights = async () => {

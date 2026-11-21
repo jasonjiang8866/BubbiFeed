@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -18,21 +19,42 @@ import { ThemedView } from '@/components/themed-view';
 import { useToast } from '@/components/toast';
 import { FEED_TYPE_COLOR, FEED_TYPE_ICON } from '@/constants/feed-icons';
 import { BottomTabInset, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
-import { AppSettings, BabyProfile, FeedingLog, FeedingType, StorageService } from '@/utils/storage';
+import { ActiveBabyChangedError, AppSettings, BabyProfile, FeedingLog, FeedingType, newLogId, StorageService } from '@/utils/storage';
 import { useColorScheme } from 'react-native';
 
 export default function LoggerScreen() {
+  const [selection, setSelection] = useState<{ baby: BabyProfile; settings: AppSettings } | null>(null);
+  const { show } = useToast();
+  useFocusEffect(useCallback(() => {
+    let current = true;
+    async function refresh() {
+      try {
+        const [settings, profiles] = await Promise.all([StorageService.getSettings(), StorageService.getProfiles()]);
+        const baby = profiles.find(p => p.id === settings.activeBabyId) ?? profiles[0];
+        if (current) setSelection({ baby, settings });
+      } catch {
+        if (!current) return;
+        setSelection(null);
+        show({ title: 'Could not load baby profile', description: 'Reopen Log Feed to retry.' });
+      }
+    }
+    void refresh();
+    return () => { current = false; };
+  }, [show]));
+
+  if (!selection) return <SafeAreaView><ThemedText>Waiting for baby profile…</ThemedText></SafeAreaView>;
+  return <FeedingForm key={selection.baby.id} activeBaby={selection.baby} settings={selection.settings} />;
+}
+
+function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settings: AppSettings }) {
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
-
   const [activeTab, setActiveTab] = useState<FeedingType>('breast');
-  const [activeBaby, setActiveBaby] = useState<BabyProfile | null>(null);
-  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const savingFeed = useRef(false);
   const confettiRef = useRef<ConfettiRef>(null);
   const { show } = useToast();
 
   // Common Form States
-  const [timestamp, setTimestamp] = useState<Date>(new Date());
   const [notes, setNotes] = useState('');
   
   // Custom Feeding Time clock states
@@ -77,24 +99,11 @@ export default function LoggerScreen() {
   const popularFoods = ['Oatmeal', 'Purée Apple', 'Avocado', 'Banana Puree', 'Sweet Potato'];
 
   useEffect(() => {
-    loadSettings();
     return () => {
       stopLeftTimer();
       stopRightTimer();
     };
   }, []);
-
-  const loadSettings = async () => {
-    const sets = await StorageService.getSettings();
-    const profiles = await StorageService.getProfiles();
-    setSettings(sets);
-    if (sets.activeBabyId) {
-      const active = profiles.find((p) => p.id === sets.activeBabyId);
-      setActiveBaby(active || profiles[0]);
-    } else {
-      setActiveBaby(profiles[0]);
-    }
-  };
 
   // Nursing Stopwatches logic
   useEffect(() => {
@@ -135,11 +144,6 @@ export default function LoggerScreen() {
   };
 
   const handleSaveFeed = async () => {
-    if (!activeBaby) {
-      Alert.alert('No Profile', 'Please configure a baby profile in Settings first.');
-      return;
-    }
-
     let finalTimestamp = new Date();
     if (hasCustomTime) {
       let hr = selectedHour;
@@ -207,7 +211,7 @@ export default function LoggerScreen() {
     }
 
     const newLog: FeedingLog = {
-      id: `log-${Date.now()}`,
+      id: newLogId(),
       babyId: activeBaby.id,
       type: activeTab,
       timestamp: finalTimestamp.toISOString(),
@@ -215,7 +219,21 @@ export default function LoggerScreen() {
       details: logDetails,
     };
 
-    await StorageService.saveLog(newLog);
+    if (savingFeed.current) return;
+    savingFeed.current = true;
+    try {
+      await StorageService.saveLog(newLog, { requireActiveBaby: true });
+    } catch (error) {
+      show({
+        title: 'Feeding not saved',
+        description: error instanceof ActiveBabyChangedError
+          ? `Select ${activeBaby.name} again to save this entry.`
+          : 'Your entry is still here. Please try again.',
+      });
+      return;
+    } finally {
+      savingFeed.current = false;
+    }
     confettiRef.current?.trigger();
     show({
       title: 'Feeding logged',

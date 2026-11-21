@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useToast } from '@/components/toast';
 import AppIcon from '@/components/app-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -18,6 +19,7 @@ import { AppSettings, BabyProfile, FeedingLog, StorageService } from '@/utils/st
 import { useColorScheme } from 'react-native';
 
 export default function HistoryScreen() {
+  const { show } = useToast();
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
 
@@ -30,8 +32,8 @@ export default function HistoryScreen() {
   // Load history whenever tab is focused
   useFocusEffect(
     useCallback(() => {
-      loadHistory();
-    }, [filter])
+      void loadHistory().catch(() => show({ title: 'Could not load feeding history' }));
+    }, [filter, show])
   );
 
   const loadHistory = async () => {
@@ -57,9 +59,14 @@ export default function HistoryScreen() {
 
   const confirmDeleteLog = async () => {
     if (deleteLogId) {
-      await StorageService.deleteLog(deleteLogId);
+      try {
+        await StorageService.deleteLog(deleteLogId);
+      } catch {
+        show({ title: 'Feeding not deleted', description: 'Please try again.' });
+        return;
+      }
       setDeleteLogId(null);
-      loadHistory();
+      void loadHistory().catch(() => show({ title: 'Could not reload feeding history' }));
     }
   };
 

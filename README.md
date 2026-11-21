@@ -51,8 +51,16 @@ data is synthetic and written only into a fresh browser session. Screenshots are
 gitignored. Native behavior still requires testing a built app on a device.
 
 See the [rebrand audit](plans/bubbifeed-rebrand.md) for the actual checks performed,
-limitations and intentionally retained identifiers. There is no unit-test script
-configured in the project manifest.
+limitations and intentionally retained identifiers. Run the feeding-record regression tests with Node 24:
+
+```sh
+npm test
+npx playwright install chromium --only-shell
+npm run test:web
+```
+
+The browser tests serve the exported app using Python 3 and exercise profile
+switching, failed writes and retrying a draft with synthetic records.
 
 ## Brand and compatibility
 
