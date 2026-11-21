@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -16,7 +16,8 @@ import { ThemedView } from '@/components/themed-view';
 import { useToast } from '@/components/toast';
 import { FEED_TYPE_COLOR, FEED_TYPE_ICON } from '@/constants/feed-icons';
 import { BottomTabInset, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
-import { ActiveBabyChangedError, AppSettings, BabyProfile, FeedingLog, newLogId, StorageService } from '@/utils/storage';
+import { formatNursingTime, useDisplayClock } from '@/hooks/use-display-clock';
+import { NursingSession, nursingDurations, ActiveBabyChangedError, AppSettings, BabyProfile, FeedingLog, newLogId, StorageService } from '@/utils/storage';
 import { useColorScheme } from 'react-native';
 
 function formatTimeSince(timestamp: string, now: number) {
@@ -40,8 +41,12 @@ export default function HomeScreen() {
     profiles: BabyProfile[];
     settings: AppSettings;
     logs: FeedingLog[];
+    session: NursingSession | null;
   } | null>(null);
-  const [now, setNow] = useState(Date.now);
+  const session = dashboard?.session ?? null;
+  const running = session !== null && session.runningSince !== null;
+  const now = useDisplayClock(running ? 1000 : 60000);
+  const nursing = nursingDurations(session, now);
   const activeBaby = dashboard?.activeBaby;
   const profiles = dashboard?.profiles ?? [];
   const settings = dashboard?.settings;
@@ -64,20 +69,17 @@ export default function HomeScreen() {
   const todayNursingMins = Math.round(todayNursingSeconds / 60);
   const timeSinceLastFeed = lastFeedObj ? formatTimeSince(lastFeedObj.timestamp, now) : 'No feeds logged';
 
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 60000);
-    return () => clearInterval(timer);
-  }, []);
-
   const loadDashboardData = useCallback(async () => {
     const current = ++request.current;
     try {
       const [settings, profiles] = await Promise.all([StorageService.getSettings(), StorageService.getProfiles()]);
       const activeBaby = profiles.find(p => p.id === settings.activeBabyId) ?? profiles[0];
-      const logs = await StorageService.getLogsForBaby(activeBaby.id);
+      const [logs, session] = await Promise.all([
+        StorageService.getLogsForBaby(activeBaby.id),
+        StorageService.getNursingSession(activeBaby.id),
+      ]);
       if (request.current !== current) return;
-      setDashboard({ settings, profiles, activeBaby, logs });
-      setNow(Date.now());
+      setDashboard({ settings, profiles, activeBaby, logs, session });
     } catch {
       if (request.current !== current) return;
       setDashboard(null);
@@ -243,6 +245,27 @@ export default function HomeScreen() {
               </View>
             )}
           </View>
+
+          {session && activeBaby && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Continue nursing for ${activeBaby.name}`}
+              onPress={() => router.navigate({ pathname: '/logger', params: { resumeBaby: activeBaby.id, openTimer: newLogId() } })}
+              style={({ pressed }) => [
+                styles.continueCard,
+                { backgroundColor: colors.backgroundElement, borderColor: colors.breast, opacity: pressed ? 0.8 : 1 },
+              ]}
+            >
+              <AppIcon name={running ? 'timer' : 'pause'} size={24} color={colors.breast} />
+              <View style={{ flex: 1 }}>
+                <ThemedText type="bold">Continue nursing</ThemedText>
+                <ThemedText type="small" style={{ color: colors.textSecondary }}>
+                  {running ? 'Running' : 'Paused'} · {session.side === 'left' ? 'Left' : 'Right'} side · {formatNursingTime(nursing.leftDuration + nursing.rightDuration)}
+                </ThemedText>
+              </View>
+              <AppIcon name="chevronRight" size={20} color={colors.textSecondary} />
+            </Pressable>
+          )}
 
           {/* Time Since Last Feeding (Big Dial Card) */}
           <ThemedView type="backgroundElement" style={styles.mainDialCard}>
@@ -443,6 +466,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,
     borderRadius: 12,
+  },
+  continueCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+    borderWidth: 1,
+    borderRadius: Spacing.four,
   },
   mainDialCard: {
     padding: Spacing.five,

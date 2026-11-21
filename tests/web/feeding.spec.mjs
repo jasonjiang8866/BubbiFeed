@@ -79,3 +79,76 @@ test('a form open in another tab cannot save after the active baby changes', asy
   await expect(page.getByText('Feeding not saved', { exact: true })).toBeVisible();
   expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).length, logsKey)).toBe(1);
 });
+
+test('a nursing timer survives closing the app, stays with its baby and saves both sides once', async ({ context, page }) => {
+  await page.clock.setFixedTime(new Date('2026-11-21T05:00:00Z'));
+  await page.getByText('Log Feed', { exact: true }).click();
+  await page.getByRole('button', { name: 'Start left timer' }).click();
+  await expect(page.getByRole('button', { name: 'Pause left timer' })).toBeVisible();
+  await page.close();
+
+  const reopened = await context.newPage();
+  await reopened.clock.setFixedTime(new Date('2026-11-21T05:08:00Z'));
+  await reopened.goto('/');
+  const continueA = reopened.getByRole('button', { name: 'Continue nursing for Aster' });
+  await expect(continueA).toContainText('Running · Left side · 08:00');
+  await reopened.getByText('Switch to Basil').click();
+  await expect(reopened.getByText('Switch to Aster')).toBeVisible();
+  await expect(continueA).toHaveCount(0);
+  await reopened.getByText('Log Feed', { exact: true }).click();
+  await expect(reopened.getByText('Recording for: Basil')).toBeVisible();
+  await expect(reopened.getByText('00:00', { exact: true })).toHaveCount(2);
+  await reopened.getByText('SAVE FEEDING SESSION').click();
+  await expect(reopened.getByText('Start a nursing timer first')).toBeVisible();
+  await reopened.getByText('Home', { exact: true }).click();
+  await reopened.getByText('Switch to Aster').click();
+  await continueA.click();
+  await expect(reopened.getByText('Recording for: Aster')).toBeVisible();
+  await reopened.getByRole('button', { name: 'Pause left timer' }).click();
+  await expect(reopened.getByRole('button', { name: 'Start left timer' })).toBeVisible();
+  await reopened.getByText('BOTTLE', { exact: true }).click();
+  await reopened.getByText('Home', { exact: true }).click();
+  await expect(continueA).toContainText('Paused · Left side · 08:00');
+  await reopened.clock.setFixedTime(new Date('2026-11-21T05:10:00Z'));
+  await continueA.click();
+  await reopened.getByRole('button', { name: 'Start right timer' }).click();
+  await expect(reopened.getByRole('button', { name: 'Pause right timer' })).toBeVisible();
+  await reopened.clock.setFixedTime(new Date('2026-11-21T05:10:30Z'));
+  await reopened.getByText('SAVE FEEDING SESSION').click();
+  await expect(reopened.getByText('Feeding logged', { exact: true })).toBeVisible();
+  await reopened.getByText('Home', { exact: true }).click();
+  await expect(continueA).toHaveCount(0);
+  const logs = await reopened.evaluate(key => JSON.parse(localStorage.getItem(key)), logsKey);
+  expect(logs).toHaveLength(2);
+  expect(logs[1]).toMatchObject({
+    babyId: 'Aster', type: 'breast', details: { breast: { leftDuration: 480, rightDuration: 30, lastBreastUsed: 'right' } },
+  });
+});
+
+test('manual nursing pauses the live timer and records a separate entry', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-11-21T05:00:00Z'));
+  await page.getByText('Log Feed', { exact: true }).click();
+  await page.getByRole('button', { name: 'Start left timer' }).click();
+  await expect(page.getByRole('button', { name: 'Pause left timer' })).toBeVisible();
+  await page.clock.setFixedTime(new Date('2026-11-21T05:01:00Z'));
+  await page.getByText('MANUAL INPUT').click();
+  await page.getByPlaceholder('0', { exact: true }).last().fill('2');
+  await page.getByText('RIGHT SIDE', { exact: true }).click();
+  await page.getByText('SAVE FEEDING SESSION').click();
+  await expect(page.getByText('Feeding logged', { exact: true })).toBeVisible();
+  await page.getByText('Home', { exact: true }).click();
+  const card = page.getByRole('button', { name: 'Continue nursing for Aster' });
+  await expect(card).toContainText('Paused · Left side · 01:00');
+  await card.click();
+  await page.getByRole('button', { name: 'Discard timer', exact: true }).click();
+  await page.getByRole('button', { name: 'Keep timer' }).click();
+  await expect(page.getByText('01:00', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Discard timer', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirm discard' }).click();
+  await expect(page.getByText('00:00', { exact: true })).toHaveCount(2);
+  await page.getByText('Home', { exact: true }).click();
+  await expect(card).toHaveCount(0);
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), logsKey);
+  expect(saved).toHaveLength(2);
+  expect(saved[1].details.breast).toEqual({ leftDuration: 0, rightDuration: 120, lastBreastUsed: 'right' });
+});

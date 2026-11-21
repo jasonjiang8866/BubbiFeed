@@ -16,6 +16,38 @@ export interface BreastDetails {
   lastBreastUsed: 'left' | 'right' | null;
 }
 
+export type NursingSide = 'left' | 'right';
+
+export interface NursingSession {
+  id: string;
+  babyId: string;
+  revision: number;
+  side: NursingSide;
+  runningSince: number | null;
+  leftMs: number;
+  rightMs: number;
+}
+
+function nursingMilliseconds(session: NursingSession | null, now: number) {
+  let leftMs = session?.leftMs ?? 0;
+  let rightMs = session?.rightMs ?? 0;
+  if (session && session.runningSince !== null) {
+    const elapsed = Math.max(0, now - session.runningSince);
+    if (session.side === 'left') leftMs += elapsed;
+    else rightMs += elapsed;
+  }
+  return { leftMs, rightMs };
+}
+
+export function nursingDurations(session: NursingSession | null, now: number): BreastDetails {
+  const { leftMs, rightMs } = nursingMilliseconds(session, now);
+  return {
+    leftDuration: Math.floor(leftMs / 1000),
+    rightDuration: Math.floor(rightMs / 1000),
+    lastBreastUsed: session?.side ?? null,
+  };
+}
+
 export interface BottleDetails {
   amount: number; // in ml
   bottleType: 'formula' | 'breastmilk';
@@ -104,10 +136,96 @@ export function newLogId(): string {
   return `log-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
+async function requireActiveBaby(babyId: string) {
+  const [settings, profiles] = await Promise.all([readSettings(), readProfiles()]);
+  const active = profiles.find(p => p.id === settings.activeBabyId) ?? profiles[0];
+  if (active.id !== babyId) throw new ActiveBabyChangedError();
+}
+
+const nursingKey = (babyId: string) => `@feedmybaby_nursing_v1:${babyId}`;
+const readStoredNursing = (babyId: string) => loadData<NursingSession | null>(nursingKey(babyId), null);
+
+// A completed log is authoritative if the app closed before clearing its timer.
+async function readNursing(babyId: string) {
+  const session = await readStoredNursing(babyId);
+  if (session && (await readLogs()).some(log => log.id === session.id)) {
+    return null;
+  }
+  return session;
+}
+
+export class NursingSessionChangedError extends Error {
+  constructor() {
+    super('The nursing timer changed. Review the current timer and try again.');
+  }
+}
+
+function checkSession(current: NursingSession | null, expected: NursingSession | null) {
+  if (current?.id !== expected?.id || current?.revision !== expected?.revision) {
+    throw new NursingSessionChangedError();
+  }
+}
+
 export const StorageService = {
   getProfiles: readProfiles,
   getSettings: readSettings,
   getAllLogs: readLogs,
+
+  getNursingSession(babyId: string) {
+    return mutate(() => readNursing(babyId));
+  },
+
+  setNursingSide(babyId: string, expected: NursingSession | null, side: NursingSide | null, now = Date.now()) {
+    return mutate(async () => {
+      await requireActiveBaby(babyId);
+      const current = await readNursing(babyId);
+      checkSession(current, expected);
+      const lastSide = side ?? current?.side;
+      if (!lastSide) return null;
+      const next: NursingSession = {
+        id: current?.id ?? newLogId(),
+        babyId,
+        revision: (current?.revision ?? 0) + 1,
+        side: lastSide,
+        runningSince: side ? now : null,
+        ...nursingMilliseconds(current, now),
+      };
+      await AsyncStorage.setItem(nursingKey(babyId), JSON.stringify(next));
+      return next;
+    });
+  },
+
+  discardNursing(expected: NursingSession) {
+    return mutate(async () => {
+      await requireActiveBaby(expected.babyId);
+      checkSession(await readNursing(expected.babyId), expected);
+      await AsyncStorage.removeItem(nursingKey(expected.babyId));
+    });
+  },
+
+  finishNursing(expected: NursingSession, timestamp: string, notes?: string, now = Date.now()) {
+    return mutate(async () => {
+      const { babyId, id } = expected;
+      await requireActiveBaby(babyId);
+      const logs = await readLogs();
+      const current = await readStoredNursing(babyId);
+      if (!logs.some(log => log.id === id)) {
+        checkSession(current, expected);
+        const breast = nursingDurations(current, now);
+        if (!breast.leftDuration && !breast.rightDuration) throw new Error('Run the timer for at least one second.');
+        logs.push({ id, babyId, type: 'breast', timestamp, notes, details: { breast } });
+        await AsyncStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs));
+      }
+      // Retrying a completed save must never clear a newer timer.
+      if (current?.id !== id) return current;
+      try {
+        await AsyncStorage.removeItem(nursingKey(babyId));
+      } catch {
+        // The log is durable. readNursing hides this timer until it is overwritten or removed.
+      }
+      return null;
+    });
+  },
 
   saveProfile(profile: BabyProfile, makeActive = false): Promise<BabyProfile[]> {
     return mutate(async () => {
@@ -131,6 +249,7 @@ export const StorageService = {
       const profiles = existing.filter(p => p.id !== profileId);
       if (!profiles.length) profiles.push(DEFAULT_BABY);
       const changes: [string, string][] = [
+        [nursingKey(profileId), 'null'],
         [STORAGE_KEYS.LOGS, JSON.stringify(logs.filter(log => log.babyId !== profileId))],
         [STORAGE_KEYS.PROFILES, JSON.stringify(profiles)],
       ];
@@ -150,11 +269,7 @@ export const StorageService = {
 
   saveLog(log: FeedingLog, options: { requireActiveBaby?: boolean } = {}): Promise<FeedingLog[]> {
     return mutate(async () => {
-      if (options.requireActiveBaby) {
-        const [settings, profiles] = await Promise.all([readSettings(), readProfiles()]);
-        const active = profiles.find(p => p.id === settings.activeBabyId) ?? profiles[0];
-        if (active.id !== log.babyId) throw new ActiveBabyChangedError();
-      }
+      if (options.requireActiveBaby) await requireActiveBaby(log.babyId);
       const logs = await readLogs();
       const index = logs.findIndex(item => item.id === log.id);
       if (index < 0) logs.push(log);
@@ -166,7 +281,12 @@ export const StorageService = {
 
   deleteLog(logId: string): Promise<FeedingLog[]> {
     return mutate(async () => {
-      const logs = (await readLogs()).filter(log => log.id !== logId);
+      const existing = await readLogs();
+      const entry = existing.find(log => log.id === logId);
+      if (entry?.type === 'breast' && (await readStoredNursing(entry.babyId))?.id === logId) {
+        await AsyncStorage.removeItem(nursingKey(entry.babyId));
+      }
+      const logs = existing.filter(log => log.id !== logId);
       await AsyncStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs));
       return logs;
     });
