@@ -40,6 +40,7 @@ secrets/
 
 # debug
 scripts/ui-check/
+test-results/
 npm-debug.*
 yarn-debug.*
 yarn-error.*

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -11,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useToast } from '@/components/toast';
 import AppIcon from '@/components/app-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -33,33 +35,36 @@ export default function SettingsScreen() {
   const [gender, setGender] = useState<'boy' | 'girl' | 'other'>('boy');
   const [birthWeight, setBirthWeight] = useState('');
 
-  useEffect(() => {
-    loadAllData();
-  }, []);
+  const { show } = useToast();
+  const request = useRef(0);
+  const loadAllData = useCallback(async () => {
+    const current = ++request.current;
+    try {
+      const [profiles, settings] = await Promise.all([StorageService.getProfiles(), StorageService.getSettings()]);
+      if (current !== request.current) return;
+      setProfiles(profiles);
+      setSettings(settings);
+    } catch {
+      if (current !== request.current) return;
+      show({ title: 'Could not load profiles', description: 'Reopen Settings to retry.' });
+    }
+  }, [show]);
 
-  const loadAllData = async () => {
-    const profs = await StorageService.getProfiles();
-    const sets = await StorageService.getSettings();
-    setProfiles(profs);
-    setSettings(sets);
+  useFocusEffect(useCallback(() => {
+    void loadAllData();
+    return () => { request.current++; };
+  }, [loadAllData]));
+
+  const updateSettings = async (changes: Partial<AppSettings>) => {
+    try {
+      setSettings(await StorageService.saveSettings(changes));
+    } catch {
+      show({ title: 'Settings not saved', description: 'Please try again.' });
+    }
   };
 
-  const handleUnitToggle = async () => {
-    if (!settings) return;
-    const newSettings: AppSettings = {
-      ...settings,
-      volumeUnit: settings.volumeUnit === 'ml' ? 'oz' : 'ml',
-    };
-    await StorageService.saveSettings(newSettings);
-    setSettings(newSettings);
-  };
-
-  const handleSelectBaby = async (babyId: string) => {
-    if (!settings) return;
-    const newSettings = { ...settings, activeBabyId: babyId };
-    await StorageService.saveSettings(newSettings);
-    setSettings(newSettings);
-  };
+  const handleUnitToggle = () => updateSettings({ volumeUnit: settings?.volumeUnit === 'ml' ? 'oz' : 'ml' });
+  const handleSelectBaby = (activeBabyId: string) => updateSettings({ activeBabyId });
 
   const startAddProfile = () => {
     setIsEditing(true);
@@ -107,19 +112,12 @@ export default function SettingsScreen() {
       birthWeight: weightNum,
     };
 
-    const updated = await StorageService.saveProfile(newProfile);
-    setProfiles(updated);
-
-    // If adding first or active
-    if (!settings?.activeBabyId || !editingId) {
-      const newSettings: AppSettings = {
-        ...(settings || { volumeUnit: 'ml', isDarkMode: false, activeBabyId: newProfile.id }),
-        activeBabyId: newProfile.id,
-      };
-      await StorageService.saveSettings(newSettings);
-      setSettings(newSettings);
+    try {
+      await StorageService.saveProfile(newProfile, !editingId || !settings?.activeBabyId);
+    } catch {
+      show({ title: 'Profile not saved', description: 'Your changes are still here. Please try again.' });
+      return;
     }
-
     setIsEditing(false);
     loadAllData();
   };
@@ -134,9 +132,12 @@ export default function SettingsScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const updated = await StorageService.deleteProfile(id);
-            setProfiles(updated);
-            loadAllData();
+            try {
+              await StorageService.deleteProfile(id);
+              await loadAllData();
+            } catch {
+              show({ title: 'Could not delete profile', description: 'Please try again.' });
+            }
           },
         },
       ]

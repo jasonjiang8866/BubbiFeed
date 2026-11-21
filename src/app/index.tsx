@@ -16,134 +16,88 @@ import { ThemedView } from '@/components/themed-view';
 import { useToast } from '@/components/toast';
 import { FEED_TYPE_COLOR, FEED_TYPE_ICON } from '@/constants/feed-icons';
 import { BottomTabInset, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
-import { AppSettings, BabyProfile, FeedingLog, StorageService } from '@/utils/storage';
+import { ActiveBabyChangedError, AppSettings, BabyProfile, FeedingLog, newLogId, StorageService } from '@/utils/storage';
 import { useColorScheme } from 'react-native';
+
+function formatTimeSince(timestamp: string, now: number) {
+  const minutes = Math.floor((now - Date.parse(timestamp)) / 60000);
+  if (minutes < 0) return 'Just logged';
+  if (minutes < 60) return `${minutes}m ago`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m ago`;
+}
 
 export default function HomeScreen() {
   const router = useRouter();
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
 
-  const [activeBaby, setActiveBaby] = useState<BabyProfile | null>(null);
   const confettiRef = useRef<ConfettiRef>(null);
+  const savingFeed = useRef(false);
+  const request = useRef(0);
   const { show } = useToast();
-  const [profiles, setProfiles] = useState<BabyProfile[]>([]);
-  const [logs, setLogs] = useState<FeedingLog[]>([]);
-  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [dashboard, setDashboard] = useState<{
+    activeBaby: BabyProfile;
+    profiles: BabyProfile[];
+    settings: AppSettings;
+    logs: FeedingLog[];
+  } | null>(null);
+  const [now, setNow] = useState(Date.now);
+  const activeBaby = dashboard?.activeBaby;
+  const profiles = dashboard?.profiles ?? [];
+  const settings = dashboard?.settings;
+  const logs = dashboard?.logs ?? [];
+  const lastFeedObj = logs[0];
+  const today = new Date(now).toDateString();
+  let todayNursingSeconds = 0;
+  let todayBottleMl = 0;
+  let todaySolidsCount = 0;
+  for (const log of logs) {
+    if (new Date(log.timestamp).toDateString() !== today) continue;
+    if (log.type === 'breast' && log.details.breast) {
+      todayNursingSeconds += log.details.breast.leftDuration + log.details.breast.rightDuration;
+    } else if (log.type === 'bottle') {
+      todayBottleMl += log.details.bottle?.amount ?? 0;
+    } else if (log.type === 'solid') {
+      todaySolidsCount++;
+    }
+  }
+  const todayNursingMins = Math.round(todayNursingSeconds / 60);
+  const timeSinceLastFeed = lastFeedObj ? formatTimeSince(lastFeedObj.timestamp, now) : 'No feeds logged';
 
-  // Home stats
-  const [timeSinceLastFeed, setTimeSinceLastFeed] = useState<string>('No feeds logged');
-  const [lastFeedObj, setLastFeedObj] = useState<FeedingLog | null>(null);
-  const [todayNursingMins, setTodayNursingMins] = useState(0);
-  const [todayBottleMl, setTodayBottleMl] = useState(0);
-  const [todaySolidsCount, setTodaySolidsCount] = useState(0);
-  
-  // Dynamic tick for "time since last feed"
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (lastFeedObj) {
-        updateTimeSince(lastFeedObj.timestamp);
-      }
-    }, 60000); // every minute
-
+    const timer = setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(timer);
-  }, [lastFeedObj]);
+  }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadDashboardData();
-    }, [])
-  );
-
-  const loadDashboardData = async () => {
-    const sets = await StorageService.getSettings();
-    const profs = await StorageService.getProfiles();
-    setSettings(sets);
-    setProfiles(profs);
-
-    let active = profs.find((p) => p.id === sets.activeBabyId);
-    if (!active && profs.length > 0) {
-      active = profs[0];
+  const loadDashboardData = useCallback(async () => {
+    const current = ++request.current;
+    try {
+      const [settings, profiles] = await Promise.all([StorageService.getSettings(), StorageService.getProfiles()]);
+      const activeBaby = profiles.find(p => p.id === settings.activeBabyId) ?? profiles[0];
+      const logs = await StorageService.getLogsForBaby(activeBaby.id);
+      if (request.current !== current) return;
+      setDashboard({ settings, profiles, activeBaby, logs });
+      setNow(Date.now());
+    } catch {
+      if (request.current !== current) return;
+      setDashboard(null);
+      show({ title: 'Could not load feeding history', description: 'Reopen Home to retry.' });
     }
-    setActiveBaby(active || null);
+  }, [show]);
 
-    if (active) {
-      const babyLogs = await StorageService.getLogsForBaby(active.id);
-      setLogs(babyLogs);
+  useFocusEffect(useCallback(() => {
+    void loadDashboardData();
+    return () => { request.current++; };
+  }, [loadDashboardData]));
 
-      // Calculations
-      if (babyLogs.length > 0) {
-        const last = babyLogs[0]; // first item is newest in sorted
-        setLastFeedObj(last);
-        updateTimeSince(last.timestamp);
-      } else {
-        setLastFeedObj(null);
-        setTimeSinceLastFeed('No feeds logged');
-      }
-
-      // Today's stats
-      const todayString = new Date().toDateString();
-      let nursingSecs = 0;
-      let bottleMl = 0;
-      let solids = 0;
-
-      babyLogs.forEach((log) => {
-        if (new Date(log.timestamp).toDateString() === todayString) {
-          if (log.type === 'breast' && log.details.breast) {
-            nursingSecs += (log.details.breast.leftDuration + log.details.breast.rightDuration);
-          } else if (log.type === 'bottle' && log.details.bottle) {
-            bottleMl += log.details.bottle.amount;
-          } else if (log.type === 'solid') {
-            solids++;
-          }
-        }
-      });
-
-      setTodayNursingMins(Math.round(nursingSecs / 60));
-      setTodayBottleMl(bottleMl);
-      setTodaySolidsCount(solids);
-    }
-  };
-
-  const updateTimeSince = (isoString: string) => {
-    const lastTime = new Date(isoString).getTime();
-    const now = new Date().getTime();
-    const diffMs = now - lastTime;
-
-    if (diffMs < 0) {
-      setTimeSinceLastFeed('Just logged');
+  const handleSwitchBaby = async (baby: BabyProfile) => {
+    try {
+      await StorageService.saveSettings({ activeBabyId: baby.id });
+    } catch {
+      show({ title: 'Could not switch baby', description: 'Please try again.' });
       return;
     }
-
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const hours = Math.floor(diffMins / 60);
-    const mins = diffMins % 60;
-
-    if (hours === 0) {
-      setTimeSinceLastFeed(`${mins}m ago`);
-    } else {
-      setTimeSinceLastFeed(`${hours}h ${mins}m ago`);
-    }
-  };
-
-  // Switch baby from dashboard header
-  const handleSwitchBaby = async (baby: BabyProfile) => {
-    if (!settings) return;
-    const newSettings = { ...settings, activeBabyId: baby.id };
-    await StorageService.saveSettings(newSettings);
-    setSettings(newSettings);
-    setActiveBaby(baby);
-    // Reload
-    const babyLogs = await StorageService.getLogsForBaby(baby.id);
-    setLogs(babyLogs);
-    if (babyLogs.length > 0) {
-      const last = babyLogs[0];
-      setLastFeedObj(last);
-      updateTimeSince(last.timestamp);
-    } else {
-      setLastFeedObj(null);
-      setTimeSinceLastFeed('No feeds logged');
-    }
+    await loadDashboardData();
   };
 
   // Calculate baby age dynamically
@@ -177,7 +131,7 @@ export default function HomeScreen() {
       return;
     }
     const newLog: FeedingLog = {
-      id: `log-${Date.now()}`,
+      id: newLogId(),
       babyId: activeBaby.id,
       type: 'bottle',
       timestamp: new Date().toISOString(),
@@ -189,7 +143,21 @@ export default function HomeScreen() {
         },
       },
     };
-    await StorageService.saveLog(newLog);
+    if (savingFeed.current) return;
+    savingFeed.current = true;
+    try {
+      await StorageService.saveLog(newLog, { requireActiveBaby: true });
+    } catch (error) {
+      show({
+        title: 'Feeding not saved',
+        description: error instanceof ActiveBabyChangedError
+          ? 'Reopen Home to refresh the active baby.'
+          : 'Please try again.',
+      });
+      return;
+    } finally {
+      savingFeed.current = false;
+    }
     confettiRef.current?.trigger();
     show({
       title: 'Feeding logged',

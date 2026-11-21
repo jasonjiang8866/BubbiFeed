@@ -31,6 +31,7 @@
     "react-native-worklets": "0.8.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "@types/react": "~19.2.2",
     "eas-cli": "^23.0.0",
     "eslint": "^9.0.0",
@@ -43,7 +44,9 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web --lan",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "node --test tests/storage.test.mjs",
+    "test:web": "expo export --platform web && playwright test"
   },
   "private": true
 }

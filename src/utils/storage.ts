@@ -66,111 +66,117 @@ const DEFAULT_SETTINGS: AppSettings = {
   isDarkMode: false,
 };
 
-// Helper: load from AsyncStorage
+
 async function loadData<T>(key: string, defaultValue: T): Promise<T> {
-  try {
-    const jsonValue = await AsyncStorage.getItem(key);
-    return jsonValue != null ? JSON.parse(jsonValue) : defaultValue;
-  } catch (e) {
-    console.error(`Error loading data for key ${key}:`, e);
-    return defaultValue;
+  const value = await AsyncStorage.getItem(key);
+  return value === null ? defaultValue : JSON.parse(value);
+}
+
+const readSettings = () => loadData<AppSettings>(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
+const readLogs = () => loadData<FeedingLog[]>(STORAGE_KEYS.LOGS, []);
+async function readProfiles(): Promise<BabyProfile[]> {
+  const profiles = await loadData<BabyProfile[]>(STORAGE_KEYS.PROFILES, []);
+  if (!Array.isArray(profiles)) throw new Error('Invalid stored baby profiles.');
+  return profiles.length ? profiles : [DEFAULT_BABY];
+}
+
+// AsyncStorage has no atomic read-modify-write. Keep the read inside the same
+// queue as the write, and share the lock with other web tabs where supported.
+let pending: Promise<void> = Promise.resolve();
+function mutate<T>(operation: () => Promise<T>): Promise<T> {
+  const result = pending.then(() => {
+    if (typeof navigator !== 'undefined' && navigator.locks) {
+      return navigator.locks.request('feedmybaby-storage-v1', operation);
+    }
+    return operation();
+  });
+  pending = result.then(() => {}, () => {});
+  return result;
+}
+
+export class ActiveBabyChangedError extends Error {
+  constructor() {
+    super('The active baby changed.');
   }
 }
 
-// Helper: save to AsyncStorage
-async function saveData<T>(key: string, value: T): Promise<void> {
-  try {
-    const jsonValue = JSON.stringify(value);
-    await AsyncStorage.setItem(key, jsonValue);
-  } catch (e) {
-    console.error(`Error saving data for key ${key}:`, e);
-  }
+export function newLogId(): string {
+  return `log-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 export const StorageService = {
-  // Baby Profiles
-  async getProfiles(): Promise<BabyProfile[]> {
-    const profiles = await loadData<BabyProfile[]>(STORAGE_KEYS.PROFILES, [DEFAULT_BABY]);
-    if (profiles.length === 0) {
-      await saveData(STORAGE_KEYS.PROFILES, [DEFAULT_BABY]);
-      return [DEFAULT_BABY];
-    }
-    return profiles;
+  getProfiles: readProfiles,
+  getSettings: readSettings,
+  getAllLogs: readLogs,
+
+  saveProfile(profile: BabyProfile, makeActive = false): Promise<BabyProfile[]> {
+    return mutate(async () => {
+      const profiles = await readProfiles();
+      const index = profiles.findIndex((p) => p.id === profile.id);
+      if (index < 0) profiles.push(profile);
+      else profiles[index] = profile;
+      const changes: [string, string][] = [[STORAGE_KEYS.PROFILES, JSON.stringify(profiles)]];
+      if (makeActive) {
+        const settings = await readSettings();
+        changes.push([STORAGE_KEYS.SETTINGS, JSON.stringify({ ...settings, activeBabyId: profile.id })]);
+      }
+      await AsyncStorage.multiSet(changes);
+      return profiles;
+    });
   },
 
-  async saveProfile(profile: BabyProfile): Promise<BabyProfile[]> {
-    const profiles = await this.getProfiles();
-    const index = profiles.findIndex((p) => p.id === profile.id);
-    if (index >= 0) {
-      profiles[index] = profile;
-    } else {
-      profiles.push(profile);
-    }
-    await saveData(STORAGE_KEYS.PROFILES, profiles);
-    return profiles;
-  },
-
-  async deleteProfile(profileId: string): Promise<BabyProfile[]> {
-    let profiles = await this.getProfiles();
-    profiles = profiles.filter((p) => p.id !== profileId);
-    if (profiles.length === 0) {
-      profiles = [DEFAULT_BABY];
-    }
-    await saveData(STORAGE_KEYS.PROFILES, profiles);
-
-    // Clean up logs for this baby
-    let logs = await this.getAllLogs();
-    logs = logs.filter((log) => log.babyId !== profileId);
-    await saveData(STORAGE_KEYS.LOGS, logs);
-
-    // Update settings if deleted active baby
-    const settings = await this.getSettings();
-    if (settings.activeBabyId === profileId) {
-      settings.activeBabyId = profiles[0].id;
-      await this.saveSettings(settings);
-    }
-
-    return profiles;
-  },
-
-  // Feeding Logs
-  async getAllLogs(): Promise<FeedingLog[]> {
-    return loadData<FeedingLog[]>(STORAGE_KEYS.LOGS, []);
+  deleteProfile(profileId: string): Promise<BabyProfile[]> {
+    return mutate(async () => {
+      const [existing, logs, settings] = await Promise.all([readProfiles(), readLogs(), readSettings()]);
+      const profiles = existing.filter(p => p.id !== profileId);
+      if (!profiles.length) profiles.push(DEFAULT_BABY);
+      const changes: [string, string][] = [
+        [STORAGE_KEYS.LOGS, JSON.stringify(logs.filter(log => log.babyId !== profileId))],
+        [STORAGE_KEYS.PROFILES, JSON.stringify(profiles)],
+      ];
+      if (settings.activeBabyId === profileId) {
+        changes.push([STORAGE_KEYS.SETTINGS, JSON.stringify({ ...settings, activeBabyId: profiles[0].id })]);
+      }
+      await AsyncStorage.multiSet(changes);
+      return profiles;
+    });
   },
 
   async getLogsForBaby(babyId: string): Promise<FeedingLog[]> {
-    const allLogs = await this.getAllLogs();
-    return allLogs
-      .filter((log) => log.babyId === babyId)
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return (await readLogs())
+      .filter(log => log.babyId === babyId)
+      .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
   },
 
-  async saveLog(log: FeedingLog): Promise<FeedingLog[]> {
-    const allLogs = await this.getAllLogs();
-    const index = allLogs.findIndex((l) => l.id === log.id);
-    if (index >= 0) {
-      allLogs[index] = log;
-    } else {
-      allLogs.push(log);
-    }
-    await saveData(STORAGE_KEYS.LOGS, allLogs);
-    return allLogs;
+  saveLog(log: FeedingLog, options: { requireActiveBaby?: boolean } = {}): Promise<FeedingLog[]> {
+    return mutate(async () => {
+      if (options.requireActiveBaby) {
+        const [settings, profiles] = await Promise.all([readSettings(), readProfiles()]);
+        const active = profiles.find(p => p.id === settings.activeBabyId) ?? profiles[0];
+        if (active.id !== log.babyId) throw new ActiveBabyChangedError();
+      }
+      const logs = await readLogs();
+      const index = logs.findIndex(item => item.id === log.id);
+      if (index < 0) logs.push(log);
+      else logs[index] = log;
+      await AsyncStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs));
+      return logs;
+    });
   },
 
-  async deleteLog(logId: string): Promise<FeedingLog[]> {
-    let allLogs = await this.getAllLogs();
-    allLogs = allLogs.filter((l) => l.id !== logId);
-    await saveData(STORAGE_KEYS.LOGS, allLogs);
-    return allLogs;
+  deleteLog(logId: string): Promise<FeedingLog[]> {
+    return mutate(async () => {
+      const logs = (await readLogs()).filter(log => log.id !== logId);
+      await AsyncStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs));
+      return logs;
+    });
   },
 
-  // App Settings
-  async getSettings(): Promise<AppSettings> {
-    return loadData<AppSettings>(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-  },
-
-  async saveSettings(settings: AppSettings): Promise<AppSettings> {
-    await saveData(STORAGE_KEYS.SETTINGS, settings);
-    return settings;
+  saveSettings(changes: Partial<AppSettings>): Promise<AppSettings> {
+    return mutate(async () => {
+      const settings = { ...await readSettings(), ...changes };
+      await AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+      return settings;
+    });
   },
 };
