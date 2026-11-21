@@ -1,5 +1,5 @@
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -19,7 +19,8 @@ import { ThemedView } from '@/components/themed-view';
 import { useToast } from '@/components/toast';
 import { FEED_TYPE_COLOR, FEED_TYPE_ICON } from '@/constants/feed-icons';
 import { BottomTabInset, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
-import { ActiveBabyChangedError, AppSettings, BabyProfile, FeedingLog, FeedingType, newLogId, StorageService } from '@/utils/storage';
+import { formatNursingTime, useDisplayClock } from '@/hooks/use-display-clock';
+import { NursingSession, NursingSessionChangedError, NursingSide, nursingDurations, ActiveBabyChangedError, AppSettings, BabyProfile, FeedingLog, FeedingType, newLogId, StorageService } from '@/utils/storage';
 import { useColorScheme } from 'react-native';
 
 export default function LoggerScreen() {
@@ -76,16 +77,24 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
   };
 
   // 1. Breast Nursing States
-  const [leftSeconds, setLeftSeconds] = useState(0);
-  const [rightSeconds, setRightSeconds] = useState(0);
-  const [timerActive, setTimerActive] = useState<'left' | 'right' | null>(null);
-  const [lastBreastUsed, setLastBreastUsed] = useState<'left' | 'right' | null>(null);
+  const [session, setSession] = useState<NursingSession | null>(null);
+  const [timerReady, setTimerReady] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [breastMode, setBreastMode] = useState<'timer' | 'manual'>('timer');
+  const [manualSide, setManualSide] = useState<NursingSide | null>(null);
   const [leftManualMins, setLeftManualMins] = useState('');
   const [rightManualMins, setRightManualMins] = useState('');
+  const timerActive = session && session.runningSince !== null ? session.side : null;
+  const now = useDisplayClock(timerActive ? 1000 : null);
+  const { leftDuration: leftSeconds, rightDuration: rightSeconds, lastBreastUsed } = nursingDurations(session, now);
+  const { resumeBaby, openTimer } = useLocalSearchParams<{ resumeBaby?: string; openTimer?: string }>();
 
-  const leftTimerRef = useRef<any>(null);
-  const rightTimerRef = useRef<any>(null);
+  const [handledOpen, setHandledOpen] = useState<string>();
+  if (openTimer && resumeBaby === activeBaby.id && openTimer !== handledOpen) {
+    setHandledOpen(openTimer);
+    setActiveTab('breast');
+    setBreastMode('timer');
+  }
 
   // 2. Bottle States
   const [bottleAmount, setBottleAmount] = useState(120); // default 120ml
@@ -98,49 +107,49 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
   // Popular solid foods tags
   const popularFoods = ['Oatmeal', 'Purée Apple', 'Avocado', 'Banana Puree', 'Sweet Potato'];
 
-  useEffect(() => {
-    return () => {
-      stopLeftTimer();
-      stopRightTimer();
-    };
-  }, []);
-
-  // Nursing Stopwatches logic
-  useEffect(() => {
-    if (timerActive === 'left') {
-      leftTimerRef.current = setInterval(() => {
-        setLeftSeconds((prev) => prev + 1);
-      }, 1000);
-      stopRightTimer();
-    } else if (timerActive === 'right') {
-      rightTimerRef.current = setInterval(() => {
-        setRightSeconds((prev) => prev + 1);
-      }, 1000);
-      stopLeftTimer();
-    } else {
-      stopLeftTimer();
-      stopRightTimer();
+  const timerRequest = useRef(0);
+  const loadTimer = useCallback(async () => {
+    const request = ++timerRequest.current;
+    setTimerReady(false);
+    try {
+      const saved = await StorageService.getNursingSession(activeBaby.id);
+      if (timerRequest.current !== request) return;
+      setSession(saved);
+      setConfirmDiscard(false);
+      setTimerReady(true);
+    } catch {
+      if (timerRequest.current === request) {
+        show({ title: 'Could not load timer', description: 'Reopen Log Feed to retry.' });
+      }
     }
-  }, [timerActive]);
+  }, [activeBaby.id, show]);
 
-  const stopLeftTimer = () => {
-    if (leftTimerRef.current) {
-      clearInterval(leftTimerRef.current);
-      leftTimerRef.current = null;
+  useFocusEffect(useCallback(() => {
+    void loadTimer();
+    return () => { timerRequest.current++; };
+  }, [loadTimer]));
+
+  const changeTimer = async (action: NursingSide | 'pause' | 'discard') => {
+    if (!timerReady || savingFeed.current) return false;
+    savingFeed.current = true;
+    try {
+      if (action === 'discard' && session) {
+        await StorageService.discardNursing(session);
+        setSession(null);
+      } else if (action !== 'discard') {
+        setSession(await StorageService.setNursingSide(activeBaby.id, session, action === 'pause' ? null : action));
+      }
+      setConfirmDiscard(false);
+      return true;
+    } catch (error) {
+      show({ title: 'Timer not updated', description: error instanceof ActiveBabyChangedError
+        ? `Select ${activeBaby.name} again to update this timer.`
+        : error instanceof NursingSessionChangedError ? error.message : 'Please try again.' });
+      if (error instanceof NursingSessionChangedError) await loadTimer();
+      return false;
+    } finally {
+      savingFeed.current = false;
     }
-  };
-
-  const stopRightTimer = () => {
-    if (rightTimerRef.current) {
-      clearInterval(rightTimerRef.current);
-      rightTimerRef.current = null;
-    }
-  };
-
-  const formatTimer = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const handleSaveFeed = async () => {
@@ -158,34 +167,25 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
 
     let logDetails: FeedingLog['details'] = {};
 
-    if (activeTab === 'breast') {
-      let finalLeftSecs = leftSeconds;
-      let finalRightSecs = rightSeconds;
-
-      if (breastMode === 'manual') {
-        const leftMins = parseInt(leftManualMins || '0', 10);
-        const rightMins = parseInt(rightManualMins || '0', 10);
-
-        if (leftMins === 0 && rightMins === 0) {
-          Alert.alert('Empty Nursing', 'Please enter nursing minutes for at least one side.');
-          return;
-        }
-        finalLeftSecs = leftMins * 60;
-        finalRightSecs = rightMins * 60;
-      } else {
-        if (leftSeconds === 0 && rightSeconds === 0) {
-          Alert.alert('Empty Nursing', 'Please run nursing timers before saving.');
-          return;
-        }
+    const isLiveTimer = activeTab === 'breast' && breastMode === 'timer';
+    if (isLiveTimer) {
+      if (!timerReady || !session) {
+        show({ title: 'Start a nursing timer first' });
+        return;
       }
-
-      logDetails = {
-        breast: {
-          leftDuration: finalLeftSecs,
-          rightDuration: finalRightSecs,
-          lastBreastUsed,
-        },
-      };
+      const elapsed = nursingDurations(session, Date.now());
+      if (!elapsed.leftDuration && !elapsed.rightDuration) {
+        show({ title: 'Run the timer for at least one second' });
+        return;
+      }
+    } else if (activeTab === 'breast') {
+      const leftMins = parseInt(leftManualMins || '0', 10);
+      const rightMins = parseInt(rightManualMins || '0', 10);
+      if (leftMins === 0 && rightMins === 0) {
+        Alert.alert('Empty Nursing', 'Please enter nursing minutes for at least one side.');
+        return;
+      }
+      logDetails = { breast: { leftDuration: leftMins * 60, rightDuration: rightMins * 60, lastBreastUsed: manualSide } };
     } else if (activeTab === 'bottle') {
       if (bottleAmount <= 0) {
         Alert.alert('Invalid Amount', 'Please input a valid feeding volume.');
@@ -210,26 +210,27 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
       };
     }
 
-    const newLog: FeedingLog = {
-      id: newLogId(),
-      babyId: activeBaby.id,
-      type: activeTab,
-      timestamp: finalTimestamp.toISOString(),
-      notes: notes.trim() || undefined,
-      details: logDetails,
-    };
-
     if (savingFeed.current) return;
     savingFeed.current = true;
     try {
-      await StorageService.saveLog(newLog, { requireActiveBaby: true });
+      const timestamp = finalTimestamp.toISOString();
+      const trimmedNotes = notes.trim() || undefined;
+      if (isLiveTimer && session) {
+        setSession(await StorageService.finishNursing(session, timestamp, trimmedNotes));
+        setConfirmDiscard(false);
+      } else {
+        await StorageService.saveLog({
+          id: newLogId(), babyId: activeBaby.id, type: activeTab, timestamp, notes: trimmedNotes, details: logDetails,
+        }, { requireActiveBaby: true });
+      }
     } catch (error) {
       show({
         title: 'Feeding not saved',
         description: error instanceof ActiveBabyChangedError
           ? `Select ${activeBaby.name} again to save this entry.`
-          : 'Your entry is still here. Please try again.',
+          : error instanceof NursingSessionChangedError ? error.message : 'Your entry is still here. Please try again.',
       });
+      if (error instanceof NursingSessionChangedError) await loadTimer();
       return;
     } finally {
       savingFeed.current = false;
@@ -244,14 +245,11 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
 
     // Reset Forms (toast is non-blocking, so reset immediately)
     setNotes('');
-    setLeftSeconds(0);
-    setRightSeconds(0);
-    setTimerActive(null);
     setFoodDescription('');
     setAmountCategory('few_bites');
+    setManualSide(null);
     setLeftManualMins('');
     setRightManualMins('');
-    setLastBreastUsed(null);
     setHasCustomTime(false);
     setSelectedHour(new Date().getHours() % 12 || 12);
     setSelectedMinute(new Date().getMinutes());
@@ -350,9 +348,9 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
                     </View>
                   </Pressable>
                   <Pressable
-                    onPress={() => {
-                      setBreastMode('manual');
-                      setTimerActive(null);
+                    disabled={!timerReady}
+                    onPress={async () => {
+                      if (!timerActive || await changeTimer('pause')) setBreastMode('manual');
                     }}
                     style={({ pressed }) => [
                       styles.breastModeToggleBtn,
@@ -388,17 +386,13 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
                           numberOfLines={1}
                           maxFontSizeMultiplier={1}
                         >
-                          {formatTimer(leftSeconds)}
+                          {formatNursingTime(leftSeconds)}
                         </ThemedText>
                         <Pressable
-                          onPress={() => {
-                            if (timerActive === 'left') {
-                              setTimerActive(null);
-                            } else {
-                              setTimerActive('left');
-                              setLastBreastUsed('left');
-                            }
-                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={timerActive === 'left' ? 'Pause left timer' : 'Start left timer'}
+                          disabled={!timerReady}
+                          onPress={() => changeTimer(timerActive === 'left' ? 'pause' : 'left')}
                           style={({ pressed }) => [
                             styles.timerBtn,
                             {
@@ -423,17 +417,13 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
                           numberOfLines={1}
                           maxFontSizeMultiplier={1}
                         >
-                          {formatTimer(rightSeconds)}
+                          {formatNursingTime(rightSeconds)}
                         </ThemedText>
                         <Pressable
-                          onPress={() => {
-                            if (timerActive === 'right') {
-                              setTimerActive(null);
-                            } else {
-                              setTimerActive('right');
-                              setLastBreastUsed('right');
-                            }
-                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={timerActive === 'right' ? 'Pause right timer' : 'Start right timer'}
+                          disabled={!timerReady}
+                          onPress={() => changeTimer(timerActive === 'right' ? 'pause' : 'right')}
                           style={({ pressed }) => [
                             styles.timerBtn,
                             {
@@ -457,6 +447,24 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
                         <ThemedText type="small">
                           Last nursed side: <ThemedText type="smallBold" style={{ color: colors.primary }}>{lastBreastUsed.toUpperCase()}</ThemedText>
                         </ThemedText>
+                      </View>
+                    )}
+                    {session && (
+                      <View style={styles.timerActions}>
+                        {confirmDiscard ? (
+                          <>
+                            <Pressable accessibilityRole="button" onPress={() => setConfirmDiscard(false)}>
+                              <ThemedText type="smallBold">Keep timer</ThemedText>
+                            </Pressable>
+                            <Pressable accessibilityRole="button" onPress={() => changeTimer('discard')}>
+                              <ThemedText type="smallBold">Confirm discard</ThemedText>
+                            </Pressable>
+                          </>
+                        ) : (
+                          <Pressable accessibilityRole="button" onPress={() => setConfirmDiscard(true)}>
+                            <ThemedText type="small" style={{ color: colors.textSecondary }}>Discard timer</ThemedText>
+                          </Pressable>
+                        )}
                       </View>
                     )}
                   </>
@@ -507,38 +515,38 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
                       </ThemedText>
                       <View style={styles.sideSelectorRow}>
                         <Pressable
-                          onPress={() => setLastBreastUsed('left')}
+                          onPress={() => setManualSide('left')}
                           style={({ pressed }) => [
                             styles.sideBtn,
                             {
-                              backgroundColor: lastBreastUsed === 'left' ? colors.breast + '30' : colors.backgroundSelected,
-                              borderColor: lastBreastUsed === 'left' ? colors.breast : colors.cardBorder,
+                              backgroundColor: manualSide === 'left' ? colors.breast + '30' : colors.backgroundSelected,
+                              borderColor: manualSide === 'left' ? colors.breast : colors.cardBorder,
                               transform: [{ scale: pressed ? 0.95 : 1 }],
                             },
                           ]}
                         >
                           <View style={styles.toggleBtnInner}>
-                            <AppIcon name="arrowLeft" size={14} color={lastBreastUsed === 'left' ? colors.breast : colors.text} />
-                            <ThemedText type="smallBold" style={{ color: lastBreastUsed === 'left' ? colors.breast : colors.text }}>
+                            <AppIcon name="arrowLeft" size={14} color={manualSide === 'left' ? colors.breast : colors.text} />
+                            <ThemedText type="smallBold" style={{ color: manualSide === 'left' ? colors.breast : colors.text }}>
                               LEFT SIDE
                             </ThemedText>
                           </View>
                         </Pressable>
 
                         <Pressable
-                          onPress={() => setLastBreastUsed('right')}
+                          onPress={() => setManualSide('right')}
                           style={({ pressed }) => [
                             styles.sideBtn,
                             {
-                              backgroundColor: lastBreastUsed === 'right' ? colors.breast + '30' : colors.backgroundSelected,
-                              borderColor: lastBreastUsed === 'right' ? colors.breast : colors.cardBorder,
+                              backgroundColor: manualSide === 'right' ? colors.breast + '30' : colors.backgroundSelected,
+                              borderColor: manualSide === 'right' ? colors.breast : colors.cardBorder,
                               transform: [{ scale: pressed ? 0.95 : 1 }],
                             },
                           ]}
                         >
                           <View style={styles.toggleBtnInner}>
-                            <AppIcon name="arrowRight" size={14} color={lastBreastUsed === 'right' ? colors.breast : colors.text} />
-                            <ThemedText type="smallBold" style={{ color: lastBreastUsed === 'right' ? colors.breast : colors.text }}>
+                            <AppIcon name="arrowRight" size={14} color={manualSide === 'right' ? colors.breast : colors.text} />
+                            <ThemedText type="smallBold" style={{ color: manualSide === 'right' ? colors.breast : colors.text }}>
                               RIGHT SIDE
                             </ThemedText>
                           </View>
@@ -1020,6 +1028,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
   },
+  timerActions: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.four },
   timerDigit: {
     fontSize: 28,
     lineHeight: 34,
