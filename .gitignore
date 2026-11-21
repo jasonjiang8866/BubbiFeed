@@ -13,10 +13,27 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
+*.pfx
 *.key
 *.mobileprovision
+
+# Local signing / store credentials (never commit actual credentials)
+credentials.json
+credentials/
+secrets/
+*service-account*.json
+*service_account*.json
+*serviceAccount*.json
+*firebase-adminsdk*.json
+
+# Distributable build artifacts
+*.apk
+*.aab
+*.ipa
+*.apks
 
 # Metro
 .metro-health-check*
@@ -31,8 +48,30 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# Environment secrets; only sanitized example templates may be tracked
+.env
+.env.*
+.envrc
+!.env.example
+!.env.sample
+!.env.template
+
+# Cloudflare local state and environment secrets
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+!.dev.vars.sample
+!.dev.vars.template
+
+# Local authentication and machine-specific assistant settings
+.npmrc
+.yarnrc.yml
+.netrc
+.pypirc
+.claude/settings.local.json
+.aws/
+.ssh/
 
 # typescript
 *.tsbuildinfo
