@@ -37,8 +37,9 @@ test('weekly totals survive adding solids, switch with the baby and roll over at
   await expect(total()).toContainText('210 ml');
   await expect(countFor('Bottle Feedings')).toHaveText('Bottle Feedings2');
   await expect(countFor('Total nursing time')).toContainText('7 min');
-  await expect(tab('120 ml')).toBeVisible();
-  await expect(tab('90 ml')).toBeVisible();
+  const chart = countFor('Daily bottle volume');
+  await expect(chart.getByText('Sat', { exact: true }).locator('..')).toContainText('120 ml');
+  await expect(chart.getByText('Sun', { exact: true }).locator('..')).toContainText('90 ml');
   await expect(interval).toBeVisible();
   await tab('Log Feed').click();
   await tab('SOLID').click();
