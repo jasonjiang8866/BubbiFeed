@@ -152,3 +152,33 @@ test('manual nursing pauses the live timer and records a separate entry', async 
   expect(saved).toHaveLength(2);
   expect(saved[1].details.breast).toEqual({ leftDuration: 0, rightDuration: 120, lastBreastUsed: 'right' });
 });
+
+test('retrying a partially saved profile keeps the same baby and activates it', async ({ page }) => {
+  await page.getByText('Settings', { exact: true }).click();
+  await page.getByText('Add Baby', { exact: true }).click();
+  const name = page.getByPlaceholder('e.g. Liam, Emma');
+  await name.fill('Clover');
+
+  // The profile write succeeds, then persistence of the active selection fails once.
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === '@feedmybaby_settings_v1') {
+        Storage.prototype.setItem = original;
+        throw new Error('simulated settings write failure');
+      }
+      return original.call(this, key, value);
+    };
+  });
+  const save = page.getByText('Save Baby', { exact: true });
+  await save.click();
+  await expect(page.getByText('Profile not saved', { exact: true })).toBeVisible();
+  await expect(name).toHaveValue('Clover');
+
+  await save.click();
+  await expect(page.getByRole('button', { name: 'Edit Clover' })).toHaveCount(1);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Edit Clover' })).toHaveCount(1);
+  await page.getByText('Home', { exact: true }).click();
+  await expect(page.getByText('Clover', { exact: true })).toBeVisible();
+});
