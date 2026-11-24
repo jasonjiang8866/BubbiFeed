@@ -1,11 +1,6 @@
 name: BubbiFeed iOS simulator
 on:
   workflow_dispatch:
-  push:
-    branches: [ci/ios-simulator-acceptance]
-    paths:
-      - .github/workflows/ios-simulator.yml
-      - tests/ios/**
 permissions:
   contents: read
 concurrency:
