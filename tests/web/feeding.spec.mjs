@@ -174,11 +174,16 @@ test('retrying a partially saved profile keeps the same baby and activates it', 
   await save.click();
   await expect(page.getByText('Profile not saved', { exact: true })).toBeVisible();
   await expect(name).toHaveValue('Clover');
+  const partialId = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('@feedmybaby_profiles_v1')).find(baby => baby.name === 'Clover')?.id);
+  expect(partialId).toBeTruthy();
 
   await save.click();
   await expect(page.getByRole('button', { name: 'Edit Clover' })).toHaveCount(1);
-  await page.reload();
-  await expect(page.getByRole('button', { name: 'Edit Clover' })).toHaveCount(1);
-  await page.getByText('Home', { exact: true }).click();
+  await page.goto('/');
   await expect(page.getByText('Clover', { exact: true })).toBeVisible();
+  await page.getByText('Settings', { exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Edit Clover' })).toHaveCount(1);
+  expect(await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('@feedmybaby_settings_v1')).activeBabyId)).toBe(partialId);
 });
