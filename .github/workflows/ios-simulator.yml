@@ -1,6 +1,7 @@
 name: BubbiFeed iOS simulator
 on:
-  workflow_dispatch:
+  push:
+    branches: [qa/ios-profile-1b421d5]
 permissions:
   contents: read
 concurrency:
@@ -9,6 +10,7 @@ concurrency:
 
 jobs:
   acceptance:
+    if: github.event.created && github.run_attempt == '1'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
@@ -18,12 +20,13 @@ jobs:
       - name: Check out the acceptance tools
         uses: actions/checkout@v4
         with:
+          ref: 1b421d5982d46831378a1f61c981f4a5abd8ece5
           path: qa
           persist-credentials: false
       - name: Check out the app at the selected commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: 1b421d5982d46831378a1f61c981f4a5abd8ece5
           path: app
           persist-credentials: false
       - uses: actions/setup-node@v4
