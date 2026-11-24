@@ -58,7 +58,7 @@ class FeedingDevice:
 
     def labels(self):
         tree = ET.fromstring(self.driver.page_source)
-        return [e.get("label", "") for e in tree.iter("XCUIElementTypeStaticText")]
+        return [e.get("label", "") for e in tree.iter("XCUIElementTypeStaticText") if not len(e)]
 
     def stats(self, *, bottles, solids, nursing=0):
         self.tab("Insights")
@@ -108,14 +108,20 @@ class FeedingDevice:
             self.driver.hide_keyboard()
         except WebDriverException:
             pass
+        # iOS can consume the first tap in the ScrollView to dismiss the keyboard.
+        # Tap a neutral label before invoking the action and confirm which form is open.
+        self.press("Gender", scroll=True)
         self.press("Save Baby", scroll=True)
-        self.find("Baby Profiles")
+        time.sleep(1)
+        if self.match("Save Baby") and self.match("Basil"):
+            self.press("Save Baby")
+        self.find("Baby Profiles", scroll=True, direction="down")
         self.tab("Home")
         self.find("Switch to Little", prefix=True)
         assert not self.match("Continue nursing for Little Sweetheart")
         self.tab("Log Feed")
         self.find("Start left timer", scroll=True)
-        assert self.labels().count("00:00") >= 2, "Second profile inherited elapsed time"
+        assert self.labels().count("00:00") == 2, "Second profile did not have two zero timers"
         self.screen("second-profile")
         self.tab("Home")
         self.press("Switch to Little", prefix=True)
