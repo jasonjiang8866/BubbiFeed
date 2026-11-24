@@ -1,0 +1,68 @@
+name: BubbiFeed iOS simulator
+on:
+  workflow_dispatch:
+  push:
+    branches: [ci/ios-simulator-acceptance]
+    paths:
+      - .github/workflows/ios-simulator.yml
+      - tests/ios/**
+permissions:
+  contents: read
+concurrency:
+  group: bubbifeed-ios-simulator
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Check out the acceptance tools
+        uses: actions/checkout@v4
+        with:
+          path: qa
+          persist-credentials: false
+      - name: Check out the app from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: app
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install app dependencies and simulator CLI
+        run: |
+          npm install --no-package-lock --no-audit --no-fund
+          npm install --global eas-cli@27.11.0 --no-audit --no-fund
+      - name: Verify Expo authentication and simulator entitlement
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$EXPO_TOKEN" || { echo "::error::EXPO_TOKEN is missing"; exit 1; }
+          eas simulator:availability --json > "$RUNNER_TEMP/availability.json"
+          jq '{accountName,available}' "$RUNNER_TEMP/availability.json"
+          jq -e --arg account "$(jq -r .expo.owner app.json)" \
+            '.available == true and .accountName == $account' "$RUNNER_TEMP/availability.json"
+      - name: Find or build the exact iOS Simulator binary
+        id: build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_BUILD_SKIP_LOCKFILE_CHECK: '1'
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          echo "App commit: $sha"
+          eas build:list --platform ios --simulator --build-profile preview --git-commit-hash "$sha" \
+            --status finished --limit 5 --non-interactive --json > "$RUNNER_TEMP/builds.json"
+          id=$(jq -r '[.[] | select(.artifacts.buildUrl != null and (.expirationDate == null or .expirationDate > (now | todate)))] | first.id // empty' "$RUNNER_TEMP/builds.json")
+          if [[ -z "$id" ]]; then
+            eas build --platform ios --profile preview --non-interactive --wait --json > "$RUNNER_TEMP/builds.json"
+            id=$(jq -er --arg sha "$sha" '.[] | select(.status == "FINISHED" and .gitCommitHash == $sha) | .id' "$RUNNER_TEMP/builds.json")
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "Source: \`$sha\` · iOS Simulator build: \`$id\`" >> "$GITHUB_STEP_SUMMARY"
