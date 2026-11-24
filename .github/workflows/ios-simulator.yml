@@ -66,3 +66,48 @@ jobs:
           fi
           echo "id=$id" >> "$GITHUB_OUTPUT"
           echo "Source: \`$sha\` · iOS Simulator build: \`$id\`" >> "$GITHUB_STEP_SUMMARY"
+      - name: Install Appium client
+        run: python -m pip install Appium-Python-Client==6.1.8
+      - name: Start one iOS simulator
+        id: simulator
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          BUILD_ID: ${{ steps.build.outputs.id }}
+        run: |
+          set -euo pipefail
+          umask 077
+          eas simulator:start --platform ios --type appium --build-id "$BUILD_ID" \
+            --name "BubbiFeed iOS $GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --max-duration-minutes 15 \
+            --max-idle-time-minutes 5 --non-interactive > "$RUNNER_TEMP/simulator-start.log" 2>&1
+          test -s .env.eas-simulator
+          eas simulator:get --json | jq '{id,name,platform,status,deviceRunSessionUrl}'
+      - name: Verify native feeding flows
+        timeout-minutes: 12
+        env:
+          EVIDENCE_DIR: ${{ runner.temp }}/ios-evidence
+        run: eas simulator:exec python ../qa/tests/ios/feeding.py
+      - name: Stop the simulator
+        if: always() && steps.simulator.outcome != 'skipped'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          name="BubbiFeed iOS $GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          eas simulator:list --platform ios --name "$name" --limit 5 --json > "$RUNNER_TEMP/session-list.json"
+          id=$(jq -r --arg name "$name" '.sessions[] | select(.name == $name) | .id' "$RUNNER_TEMP/session-list.json")
+          if [[ -n "$id" ]]; then
+            eas simulator:stop --id "$id" --non-interactive --json | jq '{id,status}'
+            mkdir -p "$RUNNER_TEMP/ios-evidence"
+            eas simulator:get --id "$id" --json | jq '{id,platform,status,startedAt,finishedAt,deviceRunSessionUrl}' \
+              | tee "$RUNNER_TEMP/ios-evidence/session.json"
+          elif [[ -s .env.eas-simulator ]]; then
+            eas simulator:stop --non-interactive --json | jq '{id,status}'
+          fi
+      - name: Upload test evidence
+        if: always() && steps.simulator.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-evidence
+          path: ${{ runner.temp }}/ios-evidence
+          if-no-files-found: warn
+          retention-days: 14
