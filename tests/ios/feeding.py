@@ -32,10 +32,12 @@ class FeedingDevice:
         self.driver.save_screenshot(str(OUT / f"{name}.png"))
         (OUT / f"{name}.xml").write_text(self.driver.page_source)
 
-    def match(self, label, prefix=False):
+    def match(self, label, prefix=False, visible=True):
         value = json.dumps(label)
         op = "BEGINSWITH" if prefix else "=="
-        query = f"visible == 1 AND (label {op} {value} OR name {op} {value} OR value == {value})"
+        query = f"(label {op} {value} OR name {op} {value} OR value == {value})"
+        if visible:
+            query = f"visible == 1 AND {query}"
         return self.driver.find_elements(AppiumBy.IOS_PREDICATE, query)
 
     def find(self, label, *, prefix=False, scroll=False, direction="up"):
@@ -44,7 +46,16 @@ class FeedingDevice:
             if elements:
                 return elements[0]
             if scroll and attempt in (1, 3, 5):
-                self.driver.execute_script("mobile: swipe", {"direction": direction})
+                candidates = self.match(label, prefix, visible=False)
+                swipe_direction = direction
+                if candidates:
+                    y = candidates[0].rect["y"]
+                    height = self.driver.get_window_size()["height"]
+                    if y < height * 0.12:
+                        swipe_direction = "down"
+                    elif y > height * 0.78:
+                        swipe_direction = "up"
+                self.driver.execute_script("mobile: swipe", {"direction": swipe_direction})
             time.sleep(0.4)
         raise AssertionError(f"Missing visible control: {label}")
 
@@ -104,13 +115,15 @@ class FeedingDevice:
         self.press("Add Baby", scroll=True)
         field = self.find("e.g. Liam, Emma", scroll=True)
         field.send_keys("Basil")
-        try:
-            self.driver.hide_keyboard()
-        except WebDriverException:
-            pass
-        # iOS can consume the first tap in the ScrollView to dismiss the keyboard.
-        # Tap a neutral label before invoking the action and confirm which form is open.
-        self.press("Gender", scroll=True)
+        # Single-line React Native inputs blur on Return. A scroll gesture does
+        # not dismiss this keyboard and can move the entire form out of view.
+        if self.driver.is_keyboard_shown():
+            self.press("return")
+        for _ in range(6):
+            if not self.driver.is_keyboard_shown():
+                break
+            time.sleep(0.3)
+        assert not self.driver.is_keyboard_shown(), "Name field still has the software keyboard"
         self.press("Save Baby", scroll=True)
         time.sleep(1)
         if self.match("Save Baby") and self.match("Basil"):
