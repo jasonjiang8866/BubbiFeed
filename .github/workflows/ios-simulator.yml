@@ -1,6 +1,7 @@
 name: BubbiFeed iOS simulator
 on:
-  workflow_dispatch:
+  push:
+    branches: [qa/ios-profile-de5d10c]
 permissions:
   contents: read
 concurrency:
@@ -9,6 +10,7 @@ concurrency:
 
 jobs:
   acceptance:
+    if: github.event.created && github.run_attempt == '1'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
@@ -18,12 +20,13 @@ jobs:
       - name: Check out the acceptance tools
         uses: actions/checkout@v4
         with:
+          ref: de5d10cef29d883c6c281c5ea5412859d204e87f
           path: qa
           persist-credentials: false
       - name: Check out the app at the selected commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: 59f0ab6cc08f6af8ef3829a2203f2da76c9203e6
           path: app
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -72,7 +75,7 @@ jobs:
           set -euo pipefail
           umask 077
           eas simulator:start --platform ios --type appium --build-id "$BUILD_ID" \
-            --name "BubbiFeed iOS $GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --max-duration-minutes 7 \
+            --name "BubbiFeed iOS $GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --max-duration-minutes 5 \
             --max-idle-time-minutes 5 --non-interactive > "$RUNNER_TEMP/simulator-start.log" 2>&1
           test -s .env.eas-simulator
           eas simulator:get --json | jq '{id,name,platform,status,deviceRunSessionUrl}'
