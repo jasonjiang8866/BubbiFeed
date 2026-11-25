@@ -17,7 +17,7 @@ import { useToast } from '@/components/toast';
 import { FEED_TYPE_COLOR, FEED_TYPE_ICON } from '@/constants/feed-icons';
 import { BottomTabInset, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
 import { formatNursingTime, useDisplayClock } from '@/hooks/use-display-clock';
-import { NursingSession, nursingDurations, ActiveBabyChangedError, AppSettings, BabyProfile, FeedingLog, newLogId, StorageService } from '@/utils/storage';
+import { NursingSession, nursingDurations, ActiveBabyChangedError, AppSettings, BabyProfile, FeedingLog, localCalendarDate, newLogId, StorageService } from '@/utils/storage';
 import { useColorScheme } from 'react-native';
 
 function formatTimeSince(timestamp: string, now: number) {
@@ -105,8 +105,8 @@ export default function HomeScreen() {
   // Calculate baby age dynamically
   const getBabyAge = () => {
     if (!activeBaby) return '';
-    const birth = new Date(activeBaby.birthDate).getTime();
-    const now = new Date().getTime();
+    const birth = Date.parse(activeBaby.birthDate.split('T')[0]);
+    const now = Date.parse(localCalendarDate());
     const diffMs = now - birth;
 
     if (diffMs < 0) return 'Expected soon';

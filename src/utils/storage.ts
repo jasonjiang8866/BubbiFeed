@@ -83,11 +83,18 @@ const STORAGE_KEYS = {
   SETTINGS: '@feedmybaby_settings_v1',
 };
 
+export function localCalendarDate(date = new Date()): string {
+  const year = String(date.getFullYear()).padStart(4, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // Initial Default Baby Profile
 const DEFAULT_BABY: BabyProfile = {
   id: 'default-baby-id',
   name: 'Little Sweetheart',
-  birthDate: new Date().toISOString(),
+  birthDate: localCalendarDate(),
   gender: 'boy',
   birthWeight: 3200, // 3.2 kg
 };

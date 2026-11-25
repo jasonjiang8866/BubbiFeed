@@ -6,6 +6,7 @@ import re
 import sys
 import time
 import xml.etree.ElementTree as ET
+from datetime import date
 from pathlib import Path
 
 from appium import webdriver
@@ -137,18 +138,23 @@ class FeedingDevice:
         self.tab("Settings")
         self.press("Add Baby", scroll=True)
         field = self.find("e.g. Liam, Emma", scroll=True)
+        birthday = date.fromisoformat(self.find("Birth date", scroll=True).get_attribute("value"))
+        formatted_birthday = f"{birthday:%B} {birthday.day}, {birthday.year}"
         field.click()
         field.send_keys("Basil")
+        assert field.get_attribute("value") == "Basil", "Name changed during keyboard input"
         self.save_with_keyboard("create-profile-keyboard")
         self.press("Edit Basil", scroll=True)
         grams = self.find("Birth weight in grams", scroll=True)
         grams.click()
         grams.clear()
         grams.send_keys("3450")
+        assert grams.get_attribute("value") == "3450", "Weight changed during keyboard input"
         self.save_with_keyboard("edit-profile-number-pad")
         assert len(self.match("Edit Basil", visible=False)) == 1, "Expected one saved Basil profile"
-        self.find("Basil", prefix=True, scroll=True)
-        assert self.driver.find_elements(AppiumBy.IOS_PREDICATE, 'label CONTAINS "3.45 kg"'), "Updated weight missing"
+        row = self.find("Basil,", prefix=True, scroll=True).get_attribute("label")
+        assert "3.45 kg" in row and f"Born: {formatted_birthday}" in row, "Profile date or weight changed"
+        self.screen("edited-profile")
         self.results.append("PASS create with name keyboard and edit with number pad, one Save tap each")
         self.tab("Home")
         self.find("Switch to Little", prefix=True)
@@ -222,6 +228,7 @@ def main():
     opts.set_capability("appium:bundleId", BUNDLE)
     opts.set_capability("appium:noReset", True)
     opts.set_capability("appium:waitForIdleTimeout", 1)
+    opts.set_capability("appium:maxTypingFrequency", 15)
     driver = webdriver.Remote(os.environ["APPIUM_URL"], options=opts)
     try:
         driver.activate_app(BUNDLE)
