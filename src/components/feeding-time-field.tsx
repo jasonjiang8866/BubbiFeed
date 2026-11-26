@@ -48,7 +48,7 @@ export function FeedingTimeField({ value, onChange, original }: Props) {
                 <Pressable key={label} accessibilityRole="button" accessibilityState={{ selected }}
                   onPress={() => onChange({ ...value, day })}
                   style={[styles.choice, { backgroundColor: selected ? colors.primary : colors.backgroundSelected }]}>
-                  <ThemedText type="smallBold" style={{ color: selected ? '#fff' : colors.text }}>{label}</ThemedText>
+                  <ThemedText type="smallBold" style={{ color: selected ? '#42251e' : colors.text }}>{label}</ThemedText>
                 </Pressable>
               );
             })}
@@ -56,7 +56,7 @@ export function FeedingTimeField({ value, onChange, original }: Props) {
           <ThemedText type="small">{fullDate} · 24-hour time</ThemedText>
           <ClockInput value={value.clock} onChange={clock => onChange({ ...value, clock })} />
           <Pressable accessibilityRole="button" onPress={() => onChange(null)} style={styles.action}>
-            <ThemedText type="smallBold" style={{ color: colors.primary }}>{original ? 'Restore original time' : 'Use current time'}</ThemedText>
+            <ThemedText type="smallBold" style={{ color: colors.text }}>{original ? 'Restore original time' : 'Use current time'}</ThemedText>
           </Pressable>
         </>
       ) : (
@@ -64,7 +64,7 @@ export function FeedingTimeField({ value, onChange, original }: Props) {
           onPress={() => onChange(draftFeedingTime(original ? new Date(original) : new Date()))}
           style={[styles.trigger, { borderColor: colors.cardBorder }]}>
           <ThemedText type="small" style={styles.summary}>{original ? fullDate + ' · ' + draftFeedingTime(date).clock : 'Current time'}</ThemedText>
-          <ThemedText type="smallBold" style={{ color: colors.primary }}>Change</ThemedText>
+          <ThemedText type="smallBold" style={{ color: colors.text }}>Change</ThemedText>
         </Pressable>
       )}
     </View>
