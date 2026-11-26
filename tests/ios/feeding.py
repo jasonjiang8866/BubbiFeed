@@ -72,9 +72,9 @@ class FeedingDevice:
         tree = ET.fromstring(self.driver.page_source)
         return [e.get("label", "") for e in tree.iter("XCUIElementTypeStaticText") if not len(e)]
 
-    def stats(self, *, bottles, solids, nursing=0):
+    def stats(self, *, bottles, solids, nursing=0, volume=210):
         self.tab("Insights")
-        self.find("210 ml", scroll=True, direction="down")
+        self.find(f"{volume} ml", scroll=True, direction="down")
         self.find("Weekly Activity Breakdown", scroll=True)
         labels = " | ".join(self.labels())
         for label, count in [("Nursing Sessions", nursing), ("Bottle Feedings", bottles),
@@ -207,6 +207,57 @@ class FeedingDevice:
             self.results.append(f"{side} timer saved {seconds}s, wall clock {measured:.1f}s")
         self.screen("saved-nursing-history")
 
+    def replace_field(self, label, value, *, done=False):
+        self.checkpoint(f"enter {label}")
+        field = self.find(label, scroll=True)
+        field.click()
+        field.clear()
+        self.find(label).send_keys(value)
+        self.expect_input(value)
+        if done:
+            self.find(label).send_keys("\n")
+
+    def night_bottle(self):
+        self.tab("Home")
+        self.press("Switch to Basil", prefix=True, scroll=True, direction="down")
+        self.find("Switch to Little", prefix=True)
+        self.press("90 ml", scroll=True)
+        self.tab("Log Feed")
+        self.press("BOTTLE", scroll=True, direction="down")
+        # A new form starts with a 120 ml bottle.
+        self.press("Change feeding time", scroll=True)
+        self.press("Yesterday", scroll=True)
+        self.replace_field("Feeding time in 24-hour format", "2350", done=True)
+        self.screen("night-bottle-before-save")
+        self.press("SAVE FEEDING SESSION", scroll=True)
+        self.stats(bottles=2, solids=0)
+        self.tab("History")
+        self.press("BOTTLE", scroll=True, direction="down")
+        self.find("Yesterday", scroll=True)
+        self.press("Edit bottle 120 ml at", prefix=True, scroll=True)
+        self.replace_field("Bottle volume in ml", "90")
+        self.press("Change feeding time", scroll=True)
+        self.replace_field("Feeding time in 24-hour format", "2340", done=True)
+        self.screen("night-bottle-edit")
+        self.press("Save changes", scroll=True)
+        self.find("Yesterday", scroll=True)
+        assert self.driver.terminate_app(BUNDLE), "App did not terminate"
+        self.driver.activate_app(BUNDLE)
+        self.tab("History")
+        self.press("BOTTLE", scroll=True, direction="down")
+        self.find("Yesterday", scroll=True)
+        edits = self.match("Edit bottle 90 ml at", prefix=True, visible=False)
+        assert len(edits) == 2, "Expected two 90 ml bottles after relaunch"
+        times = [e.get_attribute("label") for e in edits]
+        assert any("11:40" in label or "23:40" in label for label in times), "Corrected time missing"
+        self.screen("night-bottle-relaunch")
+        self.stats(bottles=2, solids=0, volume=180)
+        self.screen("night-bottle-week")
+        self.tab("Home")
+        self.press("Switch to Little", prefix=True, scroll=True, direction="down")
+        self.stats(bottles=2, solids=1, nursing=1)
+        self.results.append("Basil: yesterday 23:50 corrected to 23:40, 210 to 180 ml in two feeds after relaunch; Little: 210 ml")
+
     def run_flow(self, name, flow):
         self.checkpoint(name)
         recording = False
@@ -252,7 +303,8 @@ def main():
         device = FeedingDevice(driver)
         bottles = device.run_flow("bottle-solid", device.bottle_and_solid)
         nursing = device.run_flow("nursing", device.nursing)
-        return 0 if bottles and nursing else 1
+        night = device.run_flow("night-bottle", device.night_bottle) if nursing else False
+        return 0 if bottles and nursing and night else 1
     finally:
         driver.quit()
 
