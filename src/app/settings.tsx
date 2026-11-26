@@ -2,6 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,7 +18,7 @@ import AppIcon from '@/components/app-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
-import { AppSettings, BabyProfile, StorageService } from '@/utils/storage';
+import { AppSettings, BabyProfile, localCalendarDate, StorageService } from '@/utils/storage';
 import { useColorScheme } from 'react-native';
 
 export default function SettingsScreen() {
@@ -28,12 +29,10 @@ export default function SettingsScreen() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   
   // Profile Editor Form State
-  const [isEditing, setIsEditing] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [name, setName] = useState('');
-  const [birthDate, setBirthDate] = useState('');
+  const [editor, setEditor] = useState<{ profile: BabyProfile; isNew: boolean } | null>(null);
+  const savingProfile = useRef(false);
+  const draft = useRef({ name: '', birthDate: '', birthWeight: '' });
   const [gender, setGender] = useState<'boy' | 'girl' | 'other'>('boy');
-  const [birthWeight, setBirthWeight] = useState('');
 
   const { show } = useToast();
   const request = useRef(0);
@@ -66,25 +65,23 @@ export default function SettingsScreen() {
   const handleUnitToggle = () => updateSettings({ volumeUnit: settings?.volumeUnit === 'ml' ? 'oz' : 'ml' });
   const handleSelectBaby = (activeBabyId: string) => updateSettings({ activeBabyId });
 
-  const startAddProfile = () => {
-    setIsEditing(true);
-    setEditingId(null);
-    setName('');
-    setBirthDate(new Date().toISOString().split('T')[0]);
-    setGender('boy');
-    setBirthWeight('3200');
+  const openEditor = (profile: BabyProfile, isNew: boolean) => {
+    draft.current = {
+      name: profile.name,
+      birthDate: profile.birthDate.split('T')[0],
+      birthWeight: String(profile.birthWeight),
+    };
+    setGender(profile.gender);
+    setEditor({ profile, isNew });
   };
 
-  const startEditProfile = (profile: BabyProfile) => {
-    setIsEditing(true);
-    setEditingId(profile.id);
-    setName(profile.name);
-    setBirthDate(profile.birthDate.split('T')[0]);
-    setGender(profile.gender);
-    setBirthWeight(profile.birthWeight.toString());
-  };
+  const startAddProfile = () => openEditor({
+    id: `baby-${Date.now()}`, name: '', birthDate: localCalendarDate(), gender: 'boy', birthWeight: 3200,
+  }, true);
 
   const handleSaveProfile = async () => {
+    if (!editor || savingProfile.current) return;
+    const { name, birthDate, birthWeight } = draft.current;
     if (!name.trim()) {
       Alert.alert('Required', 'Please enter a name.');
       return;
@@ -95,31 +92,32 @@ export default function SettingsScreen() {
       return;
     }
 
-    let parsedDate: Date;
-    try {
-      parsedDate = new Date(birthDate);
-      if (isNaN(parsedDate.getTime())) throw new Error();
-    } catch {
-      Alert.alert('Invalid Date', 'Please enter date as YYYY-MM-DD');
+    const parsedDate = new Date(birthDate);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate) || Number.isNaN(parsedDate.getTime()) ||
+        parsedDate.toISOString().slice(0, 10) !== birthDate) {
+      Alert.alert('Invalid Date', 'Please enter a date as YYYY-MM-DD.');
       return;
     }
 
     const newProfile: BabyProfile = {
-      id: editingId || `baby-${Date.now()}`,
+      id: editor.profile.id,
       name: name.trim(),
-      birthDate: parsedDate.toISOString(),
+      birthDate,
       gender,
       birthWeight: weightNum,
     };
 
+    savingProfile.current = true;
     try {
-      await StorageService.saveProfile(newProfile, !editingId || !settings?.activeBabyId);
+      await StorageService.saveProfile(newProfile, editor.isNew || !settings?.activeBabyId);
+      Keyboard.dismiss();
+      setEditor(null);
+      await loadAllData();
     } catch {
       show({ title: 'Profile not saved', description: 'Your changes are still here. Please try again.' });
-      return;
+    } finally {
+      savingProfile.current = false;
     }
-    setIsEditing(false);
-    loadAllData();
   };
 
   const handleDeleteProfile = (id: string) => {
@@ -147,7 +145,12 @@ export default function SettingsScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          automaticallyAdjustKeyboardInsets
+          keyboardShouldPersistTaps="handled"
+        >
           
           <ThemedView style={styles.header}>
             <ThemedText type="title" style={styles.headerTitle}>
@@ -185,7 +188,7 @@ export default function SettingsScreen() {
           </ThemedView>
 
           {/* Baby Profiles Section */}
-          {!isEditing ? (
+          {!editor ? (
             <ThemedView type="backgroundElement" style={styles.card}>
               <View style={[styles.cardHeader, styles.profilesHeader]}>
                 <ThemedText type="subtitle" style={{ flexShrink: 1 }} numberOfLines={1}>Baby Profiles</ThemedText>
@@ -205,7 +208,8 @@ export default function SettingsScreen() {
 
               {profiles.map((baby) => {
                 const isActive = settings?.activeBabyId === baby.id;
-                const formattedDate = new Date(baby.birthDate).toLocaleDateString(undefined, {
+                const formattedDate = new Date(baby.birthDate.split('T')[0]).toLocaleDateString(undefined, {
+                  timeZone: 'UTC',
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric',
@@ -274,7 +278,9 @@ export default function SettingsScreen() {
 
                     <View style={styles.actionButtons}>
                       <Pressable
-                        onPress={() => startEditProfile(baby)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Edit ${baby.name}`}
+                        onPress={() => openEditor(baby, false)}
                         style={({ pressed }) => [
                           styles.actionButton,
                           { transform: [{ scale: pressed ? 0.88 : 1 }] }
@@ -301,12 +307,13 @@ export default function SettingsScreen() {
           ) : (
             // Add/Edit Form
             <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={{ flex: 1 }}
+              enabled={Platform.OS !== 'ios'}
+              behavior="height"
+              style={Platform.OS === 'ios' ? undefined : { flex: 1 }}
             >
               <ThemedView type="backgroundElement" style={styles.card}>
                 <ThemedText type="bold" style={styles.formTitle}>
-                  {editingId ? 'Edit Baby Profile' : 'Add New Baby'}
+                  {editor.isNew ? 'Add New Baby' : 'Edit Baby Profile'}
                 </ThemedText>
 
                 <View style={styles.formGroup}>
@@ -315,8 +322,9 @@ export default function SettingsScreen() {
                     style={[styles.input, { color: colors.text, borderColor: colors.cardBorder }]}
                     placeholder="e.g. Liam, Emma"
                     placeholderTextColor={colors.textSecondary + '70'}
-                    value={name}
-                    onChangeText={setName}
+                    defaultValue={editor.profile.name}
+                    autoCorrect={false}
+                    onChangeText={value => { draft.current.name = value; }}
                   />
                 </View>
 
@@ -326,9 +334,10 @@ export default function SettingsScreen() {
                     style={[styles.input, { color: colors.text, borderColor: colors.cardBorder }]}
                     placeholder="2026-05-20"
                     placeholderTextColor={colors.textSecondary + '70'}
-                    value={birthDate}
-                    onChangeText={setBirthDate}
-                    keyboardType="numeric"
+                    accessibilityLabel="Birth date"
+                    defaultValue={editor.profile.birthDate.split('T')[0]}
+                    onChangeText={value => { draft.current.birthDate = value; }}
+                    keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
                   />
                 </View>
 
@@ -362,17 +371,18 @@ export default function SettingsScreen() {
                   <ThemedText type="smallBold">Birth Weight (grams)</ThemedText>
                   <TextInput
                     style={[styles.input, { color: colors.text, borderColor: colors.cardBorder }]}
+                    accessibilityLabel="Birth weight in grams"
                     placeholder="e.g. 3200 for 3.2kg"
                     placeholderTextColor={colors.textSecondary + '70'}
-                    value={birthWeight}
-                    onChangeText={setBirthWeight}
+                    defaultValue={String(editor.profile.birthWeight)}
+                    onChangeText={value => { draft.current.birthWeight = value; }}
                     keyboardType="number-pad"
                   />
                 </View>
 
                 <View style={styles.formActions}>
                   <Pressable
-                    onPress={() => setIsEditing(false)}
+                    onPress={() => { if (!savingProfile.current) setEditor(null); }}
                     style={({ pressed }) => [
                       styles.btn,
                       styles.btnCancel,

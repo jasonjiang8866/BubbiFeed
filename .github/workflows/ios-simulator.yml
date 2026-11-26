@@ -20,10 +20,10 @@ jobs:
         with:
           path: qa
           persist-credentials: false
-      - name: Check out the app from main
+      - name: Check out the app at the selected commit
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.sha }}
           path: app
           persist-credentials: false
       - uses: actions/setup-node@v4

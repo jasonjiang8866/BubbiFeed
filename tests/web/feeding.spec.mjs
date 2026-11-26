@@ -6,7 +6,8 @@ test.beforeEach(async ({ context, page }) => {
   await context.addInitScript(() => {
     if (localStorage.getItem('@feedmybaby_profiles_v1')) return;
     const profiles = ['Aster', 'Basil'].map(name => ({
-      id: name, name, birthDate: '2026-06-01', gender: 'other', birthWeight: 3200,
+      id: name, name, birthDate: name === 'Aster' ? '2026-06-01T00:00:00.000Z' : '2026-06-01',
+      gender: 'other', birthWeight: 3200,
     }));
     const entry = {
       id: 'legacy', babyId: 'Aster', type: 'bottle', timestamp: new Date().toISOString(),
@@ -151,4 +152,56 @@ test('manual nursing pauses the live timer and records a separate entry', async 
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), logsKey);
   expect(saved).toHaveLength(2);
   expect(saved[1].details.breast).toEqual({ leftDuration: 0, rightDuration: 120, lastBreastUsed: 'right' });
+});
+
+test('retrying a partially saved profile keeps the same baby and activates it', async ({ page }) => {
+  await page.getByText('Settings', { exact: true }).click();
+  await page.getByText('Add Baby', { exact: true }).click();
+  const name = page.getByPlaceholder('e.g. Liam, Emma');
+  await name.fill('Clover');
+
+  // The profile write succeeds, then persistence of the active selection fails once.
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === '@feedmybaby_settings_v1') {
+        Storage.prototype.setItem = original;
+        throw new Error('simulated settings write failure');
+      }
+      return original.call(this, key, value);
+    };
+  });
+  const save = page.getByText('Save Baby', { exact: true });
+  await save.click();
+  await expect(page.getByText('Profile not saved', { exact: true })).toBeVisible();
+  await expect(name).toHaveValue('Clover');
+  const partialId = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('@feedmybaby_profiles_v1')).find(baby => baby.name === 'Clover')?.id);
+  expect(partialId).toBeTruthy();
+
+  await save.click();
+  await expect(page.getByRole('button', { name: 'Edit Clover' })).toHaveCount(1);
+  await page.goto('/');
+  await expect(page.getByText('Clover', { exact: true })).toBeVisible();
+  await page.getByText('Settings', { exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Edit Clover' })).toHaveCount(1);
+  expect(await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('@feedmybaby_settings_v1')).activeBabyId)).toBe(partialId);
+});
+
+test.describe('profile birthdays in Los Angeles', () => {
+  test.use({ timezoneId: 'America/Los_Angeles' });
+
+  test('uses the local day for a new baby and preserves existing calendar dates', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-06-02T02:30:00Z'));
+    await page.getByText('Settings', { exact: true }).click();
+    await expect(page.getByText('Born: June 1, 2026', { exact: true })).toHaveCount(2);
+    await page.getByText('Add Baby', { exact: true }).click();
+    await expect(page.getByLabel('Birth date', { exact: true })).toHaveValue('2026-06-01');
+    await page.getByPlaceholder('e.g. Liam, Emma').fill('Clover');
+    await page.getByText('Save Baby', { exact: true }).click();
+    await expect(page.getByText('Born: June 1, 2026', { exact: true })).toHaveCount(3);
+    await page.getByText('Home', { exact: true }).click();
+    await expect(page.getByText('0 days old', { exact: true })).toBeVisible();
+  });
 });

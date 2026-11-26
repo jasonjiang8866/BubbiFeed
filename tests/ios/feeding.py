@@ -6,6 +6,7 @@ import re
 import sys
 import time
 import xml.etree.ElementTree as ET
+from datetime import date
 from pathlib import Path
 
 from appium import webdriver
@@ -96,6 +97,43 @@ class FeedingDevice:
         self.stats(bottles=2, solids=1)
         self.screen("bottles-after-solid")
 
+    def expect_input(self, value):
+        # A React Native text field's accessibility identity may change as it is edited.
+        query = f'type == "XCUIElementTypeTextField" AND value == {json.dumps(value)}'
+        for _ in range(6):
+            if self.driver.find_elements(AppiumBy.IOS_PREDICATE, query):
+                return
+            time.sleep(0.2)
+        raise AssertionError(f"Expected a text field containing {value}")
+
+    def save_with_keyboard(self, evidence):
+        self.checkpoint("save the profile with the keyboard open")
+        keyboard = self.driver.find_element(AppiumBy.CLASS_NAME, "XCUIElementTypeKeyboard")
+        top = keyboard.rect["y"]
+        x = self.driver.get_window_size()["width"] // 2
+        for _ in range(5):
+            buttons = self.match("Save Baby", visible=False)
+            if buttons:
+                button = buttons[0]
+                bounds = button.rect
+                if button.is_displayed() and 65 < bounds["y"] and bounds["y"] + bounds["height"] < top:
+                    assert self.driver.is_keyboard_shown(), "Keyboard closed before tapping Save Baby"
+                    self.screen(evidence)
+                    self.driver.execute_script("mobile: tap", {
+                        "x": bounds["x"] + bounds["width"] // 2, "y": bounds["y"] + bounds["height"] // 2,
+                    })
+                    self.find("Baby Profiles", scroll=True, direction="down")
+                    for _ in range(8):
+                        if not self.driver.is_keyboard_shown():
+                            return
+                        time.sleep(0.2)
+                    raise AssertionError("Keyboard remained after saving")
+            # Drag inside the form, above the software keyboard.
+            self.driver.execute_script("mobile: dragFromToForDuration", {
+                "duration": 0.4, "fromX": x, "toX": x, "fromY": int(top * 0.85), "toY": int(top * 0.35),
+            })
+        raise AssertionError("Save Baby did not scroll above the keyboard")
+
     def nursing(self):
         self.tab("Log Feed")
         self.press("BREAST", scroll=True, direction="down")
@@ -113,22 +151,28 @@ class FeedingDevice:
 
         self.tab("Settings")
         self.press("Add Baby", scroll=True)
+        self.checkpoint("read the proposed birthday")
+        birthday = date.fromisoformat(self.find("Birth date", scroll=True).get_attribute("value"))
+        formatted_birthday = f"{birthday:%B} {birthday.day}, {birthday.year}"
+        self.checkpoint("type the new baby's name")
         field = self.find("e.g. Liam, Emma", scroll=True)
+        field.click()
         field.send_keys("Basil")
-        # Single-line React Native inputs blur on Return. A scroll gesture does
-        # not dismiss this keyboard and can move the entire form out of view.
-        if self.driver.is_keyboard_shown():
-            self.press("return")
-        for _ in range(6):
-            if not self.driver.is_keyboard_shown():
-                break
-            time.sleep(0.3)
-        assert not self.driver.is_keyboard_shown(), "Name field still has the software keyboard"
-        self.press("Save Baby", scroll=True)
-        time.sleep(1)
-        if self.match("Save Baby") and self.match("Basil"):
-            self.press("Save Baby")
-        self.find("Baby Profiles", scroll=True, direction="down")
+        self.expect_input("Basil")
+        self.save_with_keyboard("create-profile-keyboard")
+        self.press("Edit Basil", scroll=True)
+        self.checkpoint("replace the birth weight")
+        grams = self.find("Birth weight in grams", scroll=True)
+        grams.click()
+        grams.clear()
+        self.find("Birth weight in grams").send_keys("3450")
+        self.expect_input("3450")
+        self.save_with_keyboard("edit-profile-number-pad")
+        assert len(self.match("Edit Basil", visible=False)) == 1, "Expected one saved Basil profile"
+        row = self.find("Basil,", prefix=True, scroll=True).get_attribute("label")
+        assert "3.45 kg" in row and f"Born: {formatted_birthday}" in row, "Profile date or weight changed"
+        self.screen("edited-profile")
+        self.results.append("PASS create with name keyboard and edit with number pad, one Save tap each")
         self.tab("Home")
         self.find("Switch to Little", prefix=True)
         assert not self.match("Continue nursing for Little Sweetheart")
@@ -201,6 +245,7 @@ def main():
     opts.set_capability("appium:bundleId", BUNDLE)
     opts.set_capability("appium:noReset", True)
     opts.set_capability("appium:waitForIdleTimeout", 1)
+    opts.set_capability("appium:maxTypingFrequency", 15)
     driver = webdriver.Remote(os.environ["APPIUM_URL"], options=opts)
     try:
         driver.activate_app(BUNDLE)
