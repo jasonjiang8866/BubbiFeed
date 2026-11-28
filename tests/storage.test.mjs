@@ -138,3 +138,28 @@ test('failed writes are retryable and interrupted cleanup cannot duplicate or re
   await store.deleteLog(next.id);
   assert.equal(await store.getNursingSession('A'), null);
 });
+
+test('editing a bottle is scoped to its baby, retryable and cannot restore a deleted or changed record', async () => {
+  const original = { ...feed('night'), notes: 'first' };
+  const other = feed('other', 'B');
+  await store.saveLog(original);
+  await store.saveLog(other);
+  const correction = { amount: 90, timestamp: '2026-11-20T15:50:00.000Z', notes: 'corrected' };
+  await store.saveSettings({ activeBabyId: 'B' });
+  await assert.rejects(store.updateBottle(original, correction));
+  await store.saveSettings({ activeBabyId: 'A' });
+  failWrite = true;
+  await assert.rejects(store.updateBottle(original, correction), /disk full/);
+  failWrite = false;
+  await store.updateBottle(original, correction);
+  await store.updateBottle(original, correction);
+  await assert.rejects(store.updateBottle(original, { ...correction, notes: 'stale' }), /changed/);
+  const saved = await store.getAllLogs();
+  assert.equal(saved.length, 2);
+  assert.deepEqual(saved.find(x => x.id === 'other'), other);
+  assert.deepEqual(saved.find(x => x.id === 'night'), { ...original, notes: correction.notes,
+    timestamp: correction.timestamp, details: { bottle: { ...original.details.bottle, amount: 90 } } });
+  await store.deleteLog('night');
+  await assert.rejects(store.updateBottle(original, correction), /no longer/);
+  assert.deepEqual(await store.getAllLogs(), [other]);
+});

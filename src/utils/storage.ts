@@ -286,6 +286,29 @@ export const StorageService = {
     });
   },
 
+  updateBottle(original: FeedingLog, changes: { amount: number; timestamp: string; notes?: string }): Promise<void> {
+    return mutate(async () => {
+      await requireActiveBaby(original.babyId);
+      const logs = await readLogs();
+      const entry = logs.find(log => log.id === original.id && log.babyId === original.babyId);
+      if (!entry || entry.type !== 'bottle' || !entry.details.bottle || !original.details.bottle) {
+        throw new Error('This bottle is no longer in history.');
+      }
+      if (!Number.isFinite(changes.amount) || changes.amount <= 0 || !Number.isFinite(Date.parse(changes.timestamp))) {
+        throw new Error('Check the bottle volume and time.');
+      }
+      if (entry.timestamp === changes.timestamp && entry.notes === changes.notes && entry.details.bottle.amount === changes.amount) return;
+      if (entry.timestamp !== original.timestamp || entry.notes !== original.notes ||
+          entry.details.bottle.amount !== original.details.bottle.amount) {
+        throw new Error('This bottle changed. Reopen it to see the latest values.');
+      }
+      entry.timestamp = changes.timestamp;
+      entry.notes = changes.notes;
+      entry.details.bottle.amount = changes.amount;
+      await AsyncStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs));
+    });
+  },
+
   deleteLog(logId: string): Promise<FeedingLog[]> {
     return mutate(async () => {
       const existing = await readLogs();

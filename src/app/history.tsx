@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BottleEditor } from '@/components/bottle-editor';
 import { useToast } from '@/components/toast';
 import AppIcon from '@/components/app-icon';
 import { ThemedText } from '@/components/themed-text';
@@ -27,6 +28,7 @@ export default function HistoryScreen() {
   const [activeBaby, setActiveBaby] = useState<BabyProfile | null>(null);
   const [filter, setFilter] = useState<'all' | 'breast' | 'bottle' | 'solid'>('all');
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [editing, setEditing] = useState<FeedingLog | null>(null);
   const [deleteLogId, setDeleteLogId] = useState<string | null>(null);
 
   // Load history whenever tab is focused
@@ -217,6 +219,13 @@ export default function HistoryScreen() {
                               <ThemedText type="small" style={{ color: colors.textSecondary }}>
                                 {getLogTime(log.timestamp)}
                               </ThemedText>
+                              {log.type === 'bottle' && log.details.bottle && (
+                                <Pressable accessibilityRole="button"
+                                  accessibilityLabel={`Edit bottle ${getVolumeDisplay(log.details.bottle.amount)} at ${getLogTime(log.timestamp)}`}
+                                  onPress={() => setEditing(log)} style={styles.editBtn}>
+                                  <AppIcon name="edit" size={18} color={colors.text} />
+                                </Pressable>
+                              )}
                               <Pressable
                                 onPress={() => handleDeleteLog(log.id)}
                                 style={({ pressed }) => [
@@ -292,6 +301,15 @@ export default function HistoryScreen() {
           )}
         </ScrollView>
       </SafeAreaView>
+
+      {editing && (
+        <BottleEditor key={editing.id} original={editing} onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            show({ title: 'Bottle updated' });
+            void loadHistory().catch(() => show({ title: 'Could not reload feeding history' }));
+          }} />
+      )}
 
       {/* Custom themed baby dialog popups */}
       <Modal
@@ -459,6 +477,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
+  editBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   deleteBtn: {
     padding: Spacing.one,
     minWidth: 44,
