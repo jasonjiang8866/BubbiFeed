@@ -2,7 +2,6 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -13,6 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AppIcon from '@/components/app-icon';
+import { FeedingTimeField } from '@/components/feeding-time-field';
+import { resolveFeedingTime, type FeedingTimeDraft } from '@/utils/feeding-time';
 import { Confetti, ConfettiRef } from '@/components/confetti';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -58,23 +59,7 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
   // Common Form States
   const [notes, setNotes] = useState('');
   
-  // Custom Feeding Time clock states
-  const [isTimePickerVisible, setIsTimePickerVisible] = useState(false);
-  const [selectedHour, setSelectedHour] = useState(new Date().getHours() % 12 || 12);
-  const [selectedMinute, setSelectedMinute] = useState(new Date().getMinutes());
-  const [selectedAmPm, setSelectedAmPm] = useState(new Date().getHours() >= 12 ? 'PM' : 'AM');
-  const [hasCustomTime, setHasCustomTime] = useState(false);
-
-  const hoursArray = Array.from({ length: 12 }, (_, i) => i + 1);
-  const minutesArray = Array.from({ length: 60 }, (_, i) => i);
-  const ampmArray = ['AM', 'PM'];
-
-  const formatSelectedTime = () => {
-    if (!hasCustomTime) return 'Current Time';
-    const hr = selectedHour.toString().padStart(2, '0');
-    const min = selectedMinute.toString().padStart(2, '0');
-    return `${hr}:${min} ${selectedAmPm}`;
-  };
+  const [feedingTime, setFeedingTime] = useState<FeedingTimeDraft | null>(null);
 
   // 1. Breast Nursing States
   const [session, setSession] = useState<NursingSession | null>(null);
@@ -153,16 +138,12 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
   };
 
   const handleSaveFeed = async () => {
-    let finalTimestamp = new Date();
-    if (hasCustomTime) {
-      let hr = selectedHour;
-      if (selectedAmPm === 'PM' && hr < 12) hr += 12;
-      if (selectedAmPm === 'AM' && hr === 12) hr = 0;
-
-      finalTimestamp.setHours(hr);
-      finalTimestamp.setMinutes(selectedMinute);
-      finalTimestamp.setSeconds(0);
-      finalTimestamp.setMilliseconds(0);
+    let timestamp: string;
+    try {
+      timestamp = resolveFeedingTime(feedingTime);
+    } catch (error) {
+      show({ title: 'Check feeding time', description: (error as Error).message });
+      return;
     }
 
     let logDetails: FeedingLog['details'] = {};
@@ -213,7 +194,6 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
     if (savingFeed.current) return;
     savingFeed.current = true;
     try {
-      const timestamp = finalTimestamp.toISOString();
       const trimmedNotes = notes.trim() || undefined;
       if (isLiveTimer && session) {
         setSession(await StorageService.finishNursing(session, timestamp, trimmedNotes));
@@ -250,10 +230,7 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
     setManualSide(null);
     setLeftManualMins('');
     setRightManualMins('');
-    setHasCustomTime(false);
-    setSelectedHour(new Date().getHours() % 12 || 12);
-    setSelectedMinute(new Date().getMinutes());
-    setSelectedAmPm(new Date().getHours() >= 12 ? 'PM' : 'AM');
+    setFeedingTime(null);
   };
 
   // Convert volume unit displays
@@ -270,7 +247,7 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
           {/* Header */}
           <ThemedView style={styles.header}>
@@ -728,187 +705,7 @@ function FeedingForm({ activeBaby, settings }: { activeBaby: BabyProfile; settin
             {/* Divider */}
             <View style={[styles.divider, { backgroundColor: colors.cardBorder }]} />
 
-            {/* Custom Feeding Time field */}
-            <View style={styles.formGroup}>
-              <ThemedText type="smallBold">Feeding Time</ThemedText>
-              <Pressable
-                onPress={() => setIsTimePickerVisible(true)}
-                style={({ pressed }) => [
-                  styles.input,
-                  styles.timePickerTrigger,
-                  {
-                    borderColor: colors.cardBorder,
-                    backgroundColor: colors.background,
-                    transform: [{ scale: pressed ? 0.98 : 1 }],
-                  },
-                ]}
-              >
-                <View style={styles.timePickerLabelRow}>
-                  <AppIcon name="clock" size={16} color={hasCustomTime ? colors.text : colors.textSecondary} />
-                  <ThemedText
-                    numberOfLines={2}
-                    style={{ flexShrink: 1, color: hasCustomTime ? colors.text : colors.textSecondary + 'B0' }}>
-                    {hasCustomTime ? `Custom: ${formatSelectedTime()}` : `Logged: Current Time (${new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })})`}
-                  </ThemedText>
-                </View>
-                <ThemedText style={{ color: activeTab === 'breast' ? colors.breast : activeTab === 'bottle' ? colors.bottle : colors.solid, fontSize: 12, fontWeight: 'bold', flexShrink: 0 }}>
-                  CHANGE
-                </ThemedText>
-              </Pressable>
-            </View>
-
-            {/* Beautiful Clock Dial / Time Picker Modal */}
-            <Modal
-              visible={isTimePickerVisible}
-              transparent={true}
-              animationType="fade"
-              onRequestClose={() => setIsTimePickerVisible(false)}
-            >
-              <View style={styles.modalBackdrop}>
-                <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsTimePickerVisible(false)} />
-                
-                <ThemedView type="backgroundElement" style={[styles.modalCard, { borderColor: colors.backgroundSelected }]}>
-                  <ThemedText type="bold" style={styles.modalTitle}>
-                    Select Feeding Time
-                  </ThemedText>
-                  
-                  <ThemedText type="small" style={{ color: colors.textSecondary, marginBottom: Spacing.four, textAlign: 'center' }}>
-                    Scroll and tap to select the exact feeding time
-                  </ThemedText>
-
-                  <View style={styles.dialContainer}>
-                    {/* Hour Column */}
-                    <View style={styles.dialColumnContainer}>
-                      <ThemedText type="smallBold" style={styles.columnLabel}>HOUR</ThemedText>
-                      <ScrollView style={styles.dialScrollView} showsVerticalScrollIndicator={false}>
-                        {hoursArray.map((h) => {
-                          const isSelected = selectedHour === h;
-                          const highlightColor = activeTab === 'breast' ? colors.breast : activeTab === 'bottle' ? colors.bottle : colors.solid;
-                          return (
-                            <Pressable
-                              key={h}
-                              onPress={() => setSelectedHour(h)}
-                              style={[
-                                styles.dialItem,
-                                {
-                                  backgroundColor: isSelected ? highlightColor : 'transparent',
-                                },
-                              ]}
-                            >
-                              <ThemedText
-                                type={isSelected ? 'bold' : 'default'}
-                                style={{ color: isSelected ? '#FFFFFF' : colors.text }}
-                              >
-                                {h.toString().padStart(2, '0')}
-                              </ThemedText>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-
-                    {/* Minute Column */}
-                    <View style={styles.dialColumnContainer}>
-                      <ThemedText type="smallBold" style={styles.columnLabel}>MINUTE</ThemedText>
-                      <ScrollView style={styles.dialScrollView} showsVerticalScrollIndicator={false}>
-                        {minutesArray.map((m) => {
-                          const isSelected = selectedMinute === m;
-                          const highlightColor = activeTab === 'breast' ? colors.breast : activeTab === 'bottle' ? colors.bottle : colors.solid;
-                          return (
-                            <Pressable
-                              key={m}
-                              onPress={() => setSelectedMinute(m)}
-                              style={[
-                                styles.dialItem,
-                                {
-                                  backgroundColor: isSelected ? highlightColor : 'transparent',
-                                },
-                              ]}
-                            >
-                              <ThemedText
-                                type={isSelected ? 'bold' : 'default'}
-                                style={{ color: isSelected ? '#FFFFFF' : colors.text }}
-                              >
-                                {m.toString().padStart(2, '0')}
-                              </ThemedText>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-
-                    {/* AM/PM Column */}
-                    <View style={styles.dialColumnContainer}>
-                      <ThemedText type="smallBold" style={styles.columnLabel}>PERIOD</ThemedText>
-                      <ScrollView style={styles.dialScrollView} showsVerticalScrollIndicator={false}>
-                        {ampmArray.map((p) => {
-                          const isSelected = selectedAmPm === p;
-                          const highlightColor = activeTab === 'breast' ? colors.breast : activeTab === 'bottle' ? colors.bottle : colors.solid;
-                          return (
-                            <Pressable
-                              key={p}
-                              onPress={() => setSelectedAmPm(p)}
-                              style={[
-                                styles.dialItem,
-                                {
-                                  backgroundColor: isSelected ? highlightColor : 'transparent',
-                                },
-                              ]}
-                            >
-                              <ThemedText
-                                type={isSelected ? 'bold' : 'default'}
-                                style={{ color: isSelected ? '#FFFFFF' : colors.text }}
-                              >
-                                {p}
-                              </ThemedText>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-                  </View>
-
-                  {/* Modal Buttons */}
-                  <View style={[styles.modalButtonsRow, { marginTop: Spacing.four }]}>
-                    <Pressable
-                      onPress={() => {
-                        setHasCustomTime(false);
-                        setIsTimePickerVisible(false);
-                      }}
-                      style={({ pressed }) => [
-                        styles.modalBtn,
-                        {
-                          backgroundColor: colors.backgroundSelected,
-                          transform: [{ scale: pressed ? 0.95 : 1 }],
-                        },
-                      ]}
-                    >
-                      <ThemedText type="smallBold" style={{ color: colors.textSecondary }}>
-                        Reset Current
-                      </ThemedText>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={() => {
-                        setHasCustomTime(true);
-                        setIsTimePickerVisible(false);
-                      }}
-                      style={({ pressed }) => [
-                        styles.modalBtn,
-                        {
-                          backgroundColor: activeTab === 'breast' ? colors.breast : activeTab === 'bottle' ? colors.bottle : colors.solid,
-                          transform: [{ scale: pressed ? 0.95 : 1 }],
-                        },
-                      ]}
-                    >
-                      <ThemedText type="smallBold" style={{ color: '#FFFFFF' }}>
-                        Set Time
-                      </ThemedText>
-                    </Pressable>
-                  </View>
-                </ThemedView>
-              </View>
-            </Modal>
+            <FeedingTimeField value={feedingTime} onChange={setFeedingTime} />
 
             {/* Common Notes field */}
             <View style={styles.formGroup}>
@@ -1196,86 +993,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     borderWidth: 1,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timePickerTrigger: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Spacing.three,
-    gap: Spacing.two,
-  },
-  timePickerLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    flexShrink: 1,
-    flex: 1,
-  },
-  dialContainer: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-    width: '100%',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.02)',
-    borderRadius: 16,
-    padding: Spacing.two,
-  },
-  dialColumnContainer: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  columnLabel: {
-    fontSize: 10,
-    color: 'gray',
-    marginBottom: Spacing.one,
-  },
-  dialScrollView: {
-    height: 160,
-    width: '100%',
-  },
-  dialItem: {
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 10,
-    marginVertical: 1,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.four,
-  },
-  modalCard: {
-    width: '90%',
-    maxWidth: 340,
-    borderRadius: 24,
-    padding: Spacing.five,
-    alignItems: 'center',
-    borderWidth: 1,
-    shadowColor: '#000000',
-    shadowOpacity: 0.15,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 10 },
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: Spacing.two,
-    textAlign: 'center',
-  },
-  modalButtonsRow: {
-    flexDirection: 'row',
-    gap: Spacing.three,
-    width: '100%',
-  },
-  modalBtn: {
-    flex: 1,
-    paddingVertical: Spacing.three,
-    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
