@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CareHandoff } from '@/components/care-handoff';
+import { buildCareHandoff, feedingDayTotals } from '@/utils/care-handoff';
 import AppIcon from '@/components/app-icon';
 import { Confetti, ConfettiRef } from '@/components/confetti';
 import { ThemedText } from '@/components/themed-text';
@@ -43,6 +45,7 @@ export default function HomeScreen() {
     logs: FeedingLog[];
     session: NursingSession | null;
   } | null>(null);
+  const [handoff, setHandoff] = useState<ReturnType<typeof buildCareHandoff> | null>(null);
   const session = dashboard?.session ?? null;
   const running = session !== null && session.runningSince !== null;
   const now = useDisplayClock(running ? 1000 : 60000);
@@ -52,20 +55,7 @@ export default function HomeScreen() {
   const settings = dashboard?.settings;
   const logs = dashboard?.logs ?? [];
   const lastFeedObj = logs[0];
-  const today = new Date(now).toDateString();
-  let todayNursingSeconds = 0;
-  let todayBottleMl = 0;
-  let todaySolidsCount = 0;
-  for (const log of logs) {
-    if (new Date(log.timestamp).toDateString() !== today) continue;
-    if (log.type === 'breast' && log.details.breast) {
-      todayNursingSeconds += log.details.breast.leftDuration + log.details.breast.rightDuration;
-    } else if (log.type === 'bottle') {
-      todayBottleMl += log.details.bottle?.amount ?? 0;
-    } else if (log.type === 'solid') {
-      todaySolidsCount++;
-    }
-  }
+  const { nursingSeconds: todayNursingSeconds, bottleMl: todayBottleMl, solids: todaySolidsCount } = feedingDayTotals(logs, now);
   const todayNursingMins = Math.round(todayNursingSeconds / 60);
   const timeSinceLastFeed = lastFeedObj ? formatTimeSince(lastFeedObj.timestamp, now) : 'No feeds logged';
 
@@ -79,7 +69,9 @@ export default function HomeScreen() {
         StorageService.getNursingSession(activeBaby.id),
       ]);
       if (request.current !== current) return;
-      setDashboard({ settings, profiles, activeBaby, logs, session });
+      const snapshot = { settings, profiles, activeBaby, logs, session };
+      setDashboard(snapshot);
+      return snapshot;
     } catch {
       if (request.current !== current) return;
       setDashboard(null);
@@ -89,8 +81,14 @@ export default function HomeScreen() {
 
   useFocusEffect(useCallback(() => {
     void loadDashboardData();
-    return () => { request.current++; };
+    return () => { request.current++; setHandoff(null); };
   }, [loadDashboardData]));
+
+  const openHandoff = async () => {
+    const snapshot = await loadDashboardData();
+    if (!snapshot || snapshot.activeBaby.id !== activeBaby?.id) return;
+    setHandoff(buildCareHandoff(snapshot.activeBaby, snapshot.logs, snapshot.session, snapshot.settings.volumeUnit, Date.now()));
+  };
 
   const handleSwitchBaby = async (baby: BabyProfile) => {
     try {
@@ -307,6 +305,13 @@ export default function HomeScreen() {
                 <ThemedText type="small" style={{ color: colors.textSecondary }}>Solids</ThemedText>
               </View>
             </View>
+            {activeBaby && (
+              <Pressable accessibilityRole="button" accessibilityLabel="Care handoff" onPress={openHandoff}
+                style={[styles.handoffButton, { borderTopColor: colors.cardBorder }]}>
+                <ThemedText type="smallBold">Care handoff</ThemedText>
+                <AppIcon name="chevronRight" size={18} color={colors.text} />
+              </Pressable>
+            )}
           </ThemedView>
 
           {/* 3 AM Fast Bottle Logger */}
@@ -417,6 +422,7 @@ export default function HomeScreen() {
 
         </ScrollView>
       </SafeAreaView>
+      {handoff && <CareHandoff summary={handoff} onClose={() => setHandoff(null)} />}
       <Confetti ref={confettiRef} />
     </ThemedView>
   );
@@ -538,6 +544,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  handoffButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    minHeight: 44, borderTopWidth: StyleSheet.hairlineWidth, marginTop: Spacing.two,
   },
   shortcutRow: {
     flexDirection: 'row',

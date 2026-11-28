@@ -96,6 +96,19 @@ class FeedingDevice:
         self.press("SAVE FEEDING SESSION", scroll=True)
         self.stats(bottles=2, solids=1)
         self.screen("bottles-after-solid")
+        self.tab("Home")
+        self.press("Care handoff", scroll=True)
+        self.find("Care handoff for Little Sweetheart")
+        self.find("2 bottles · 210 ml")
+        self.find("1 solid feed")
+        self.screen("handoff-preview")
+        self.press("Share handoff", scroll=True)
+        self.find("Copy", scroll=True)
+        self.screen("handoff-ios-share-sheet")
+        self.press("Copy")
+        self.press("Close handoff", scroll=True, direction="down")
+        self.results.append("PASS caregiver preview and native iOS share sheet with local Copy")
+
 
     def expect_input(self, value):
         # A React Native text field's accessibility identity may change as it is edited.
@@ -175,6 +188,13 @@ class FeedingDevice:
         self.results.append("PASS create with name keyboard and edit with number pad, one Save tap each")
         self.tab("Home")
         self.find("Switch to Little", prefix=True)
+        self.press("Care handoff", scroll=True)
+        self.find("Care handoff for Basil")
+        self.find("0 bottles · 0 ml")
+        self.find("No feeds recorded yet.")
+        assert not self.match("Nursing timer", prefix=True), "Another baby's timer leaked into the handoff"
+        self.screen("handoff-empty-sibling")
+        self.press("Close handoff", scroll=True, direction="down")
         assert not self.match("Continue nursing for Little Sweetheart")
         self.tab("Log Feed")
         self.find("Start left timer", scroll=True)
